@@ -127,14 +127,21 @@ export async function listPublishedProducts(): Promise<Product[]> {
   return data.map(productFromRow)
 }
 
-export async function saveRemoteProduct(input: ProductInput): Promise<Product> {
+export async function saveRemoteProducts(inputs: ProductInput[]): Promise<Product[]> {
+  if (!inputs.length) return []
   const { data, error } = await getClient()
     .from("products")
-    .upsert(productToRow(input), { onConflict: "id" })
+    .upsert(inputs.map(productToRow), { onConflict: "id" })
     .select("*")
-    .single()
+
   if (error) throw error
-  return productFromRow(data)
+  return data.map(productFromRow)
+}
+
+export async function saveRemoteProduct(input: ProductInput): Promise<Product> {
+  const [product] = await saveRemoteProducts([input])
+  if (!product) throw new Error("Supabase saved no product record.")
+  return product
 }
 
 export async function removeRemoteProduct(id: string) {

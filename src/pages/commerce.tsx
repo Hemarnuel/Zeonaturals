@@ -1,15 +1,17 @@
-import { FormEvent, useEffect, useMemo, useState } from "react"
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router"
 import {
   ApiError,
   apiRequest,
   extractProducts,
+  getBuiltInProductSlugs,
   getAdminProducts,
   normalizeProduct,
   Product,
   ProductInput,
   removeProductRecord,
   saveProductRecord,
+  saveProductRecords,
 } from "../api"
 import {
   getAdminUser,
@@ -17,9 +19,15 @@ import {
   listAdminProducts,
   removeRemoteProduct,
   saveRemoteProduct,
+  saveRemoteProducts,
   signInAdmin,
   signOutAdmin,
 } from "../supabase"
+import {
+  parseProductCsv,
+  ProductCsvPreview,
+  PRODUCT_CSV_TEMPLATE,
+} from "../productCsv"
 import { useCart } from "../cart"
 import { IS_DEMO_API } from "../config"
 import {
@@ -1012,6 +1020,9 @@ export function AdminPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured)
+  const [csvPreview, setCsvPreview] = useState<ProductCsvPreview | null>(null)
+  const [csvParsing, setCsvParsing] = useState(false)
+  const [csvImporting, setCsvImporting] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -1105,6 +1116,57 @@ export function AdminPage() {
     }
   }
 
+  async function handleCsvSelection(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0]
+    event.currentTarget.value = ""
+    if (!file) return
+
+    setCsvPreview(null)
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      setCsvPreview({ products: [], errors: ["Choose a .csv file."], rowCount: 0 })
+      return
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setCsvPreview({ products: [], errors: ["CSV files must be 5 MB or smaller."], rowCount: 0 })
+      return
+    }
+
+    setCsvParsing(true)
+    try {
+      const existingSlugs = new Set([
+        ...products.map((product) => product.slug.toLowerCase()),
+        ...getBuiltInProductSlugs(),
+      ])
+      setCsvPreview(await parseProductCsv(file, existingSlugs))
+    } catch (error) {
+      setCsvPreview({
+        products: [],
+        errors: [error instanceof Error ? error.message : "Unable to read this CSV."],
+        rowCount: 0,
+      })
+    } finally {
+      setCsvParsing(false)
+    }
+  }
+
+  async function handleCsvImport() {
+    if (!csvPreview || csvPreview.errors.length || !csvPreview.products.length) return
+
+    setCsvImporting(true)
+    try {
+      const savedProducts = isSupabaseConfigured
+        ? await saveRemoteProducts(csvPreview.products)
+        : saveProductRecords(csvPreview.products)
+      await refreshProducts()
+      setNotice(`Imported ${savedProducts.length} products from CSV.`)
+      setCsvPreview(null)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "CSV import failed. No products were imported.")
+    } finally {
+      setCsvImporting(false)
+    }
+  }
+
   if (isSupabaseConfigured && authLoading) {
     return (
       <main className="mx-auto max-w-xl px-5 py-24 text-center">
@@ -1189,6 +1251,70 @@ export function AdminPage() {
           {notice}
         </div>
       )}
+
+      <section className="mb-8 rounded-card border border-walnut/10 bg-white/35 p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <Heading level={2} className="text-2xl">Upload products from CSV</Heading>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-walnut/65">
+              Required columns: name, price, stock, description, ingredients, and how_to_use. Optional columns include slug, category, goal, image, published, facts_json, and faq_json.
+            </p>
+          </div>
+          <a
+            href={`data:text/csv;charset=utf-8,${encodeURIComponent(PRODUCT_CSV_TEMPLATE)}`}
+            download="zoenaturals-products-template.csv"
+            className="shrink-0 text-sm font-bold text-deep-fern underline underline-offset-4"
+          >
+            Download CSV template
+          </a>
+        </div>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-[1fr_auto] sm:items-center">
+          <input
+            type="file"
+            accept=".csv,text/csv"
+            aria-label="Choose product CSV file"
+            onChange={handleCsvSelection}
+            disabled={csvParsing || csvImporting}
+            className="block w-full min-w-0 text-sm text-walnut file:mr-4 file:rounded-card file:border-0 file:bg-deep-fern file:px-4 file:py-3 file:text-sm file:font-bold file:text-cream hover:file:bg-walnut disabled:opacity-50"
+          />
+          <Button
+            type="button"
+            onClick={handleCsvImport}
+            disabled={
+              csvParsing ||
+              csvImporting ||
+              !csvPreview?.products.length ||
+              Boolean(csvPreview?.errors.length)
+            }
+          >
+            {csvParsing
+              ? "Checking CSV..."
+              : csvImporting
+                ? "Importing..."
+                : csvPreview?.products.length
+                  ? `Import ${csvPreview.products.length} products`
+                  : "Import products"}
+          </Button>
+        </div>
+
+        {csvPreview && (
+          <div className="mt-4" aria-live="polite">
+            {csvPreview.errors.length ? (
+              <div role="alert" className="rounded-card bg-terracotta/10 p-4 text-sm text-terracotta-dark">
+                <p className="font-bold">Fix these CSV issues and upload the file again:</p>
+                <ul className="mt-2 list-inside list-disc space-y-1">
+                  {csvPreview.errors.map((error, index) => <li key={`${index}-${error}`}>{error}</li>)}
+                </ul>
+              </div>
+            ) : (
+              <p className="rounded-card bg-sage/20 px-4 py-3 text-sm font-semibold text-deep-fern">
+                {csvPreview.rowCount} product rows checked and ready to import.
+              </p>
+            )}
+          </div>
+        )}
+      </section>
 
       <div className="grid gap-8 xl:grid-cols-[1.1fr_0.9fr]">
         <form onSubmit={handleSubmit} className="space-y-5 rounded-card border border-walnut/10 bg-white/35 p-6">

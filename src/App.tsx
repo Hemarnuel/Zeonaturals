@@ -86,13 +86,13 @@ function Brand() {
     <NavLink
       href="/"
       className="inline-flex items-center gap-2"
-      aria-label="Zoenaturals home"
+      aria-label="ZeoNaturals home"
     >
       <span className="grid size-9 place-items-center rounded-full bg-deep-fern text-cream">
         <Icon name="sprout" size="sm" />
       </span>
       <span className="font-heading text-xl tracking-tight text-walnut">
-        zoe<span className="text-deep-fern">naturals</span>
+        ZeoNaturals
       </span>
     </NavLink>
   )
@@ -775,9 +775,9 @@ function Footer() {
             href="/"
             variant="footer"
             className="inline-block font-heading text-3xl text-cream"
-            aria-label="Zoenaturals home"
+            aria-label="ZeoNaturals home"
           >
-            zoenaturals
+            ZeoNaturals
           </NavLink>
           <p className="mt-4 max-w-sm leading-7 text-cream/70">
             Plant-based wellness for feeling grounded, nourished, and wholly

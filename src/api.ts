@@ -64,8 +64,7 @@ export function getAdminProducts(): Product[] {
   return getStoredAdminProducts()
 }
 
-export function saveProductRecord(input: ProductInput): Product {
-  const existing = getStoredAdminProducts()
+function productFromInput(input: ProductInput): Product {
   const generatedSlug = input.name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -88,11 +87,19 @@ export function saveProductRecord(input: ProductInput): Product {
     faq: input.faq || [],
     published: input.published ?? true,
   }
-
-  const withoutDuplicate = existing.filter((item) => item.id !== nextProduct.id)
-  const updated = [...withoutDuplicate, nextProduct]
-  setStoredAdminProducts(updated)
   return nextProduct
+}
+
+export function saveProductRecords(inputs: ProductInput[]): Product[] {
+  const existing = new Map(getStoredAdminProducts().map((product) => [product.id, product]))
+  const nextProducts = inputs.map(productFromInput)
+  nextProducts.forEach((product) => existing.set(product.id, product))
+  setStoredAdminProducts([...existing.values()])
+  return nextProducts
+}
+
+export function saveProductRecord(input: ProductInput): Product {
+  return saveProductRecords([input])[0]
 }
 
 export function removeProductRecord(id: string) {
@@ -397,6 +404,10 @@ const demoProducts: Product[] = [
   },
 ]
 
+export function getBuiltInProductSlugs(): string[] {
+  return demoProducts.map((product) => product.slug.toLowerCase())
+}
+
 export class ApiError extends Error {
   status: number
 
@@ -468,7 +479,7 @@ async function mockApiRequest<T>(path: string, init?: RequestInit): Promise<T | 
 
   if (isProductRequest(url.pathname) && isSupabaseConfigured) {
     const { listPublishedProducts } = await import("./supabase")
-    const remoteProducts = await listPublishedProducts()
+    const remoteProducts = await listPublishedProducts().catch(() => [])
     const remoteSlugs = new Set(remoteProducts.map((product) => product.slug))
     const products = [
       ...remoteProducts,
