@@ -1,0 +1,51 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --color-sage: #a3b18a;
+  --color-cream: #f5efe0;
+  --color-terracotta: #c97b5c;
+  --color-terracotta-dark: #ae654a;
+  --color-walnut: #5c4836;
+  --color-deep-fern: #3d6b35;
+  --color-gold: #c9a96a;
+  --font-heading: "Fraunces", Georgia, serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --radius-card: 0.75rem;
+  --shadow-soft: 0 18px 45px rgba(92, 72, 54, 0.12);
+  --shadow-nav: 0 -8px 30px rgba(92, 72, 54, 0.1);
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    background: var(--color-cream);
+    color: var(--color-walnut);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button,
+  input {
+    font: inherit;
+  }
+}
+
+@layer components {
+  .eyebrow {
+    color: color-mix(in srgb, var(--color-walnut) 72%, transparent);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+}
