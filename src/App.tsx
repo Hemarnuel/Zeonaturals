@@ -84,7 +84,7 @@ function formatNaira(value: number) {
 function Brand() {
   return (
     <NavLink
-      href="#"
+      href="/"
       className="inline-flex items-center gap-2"
       aria-label="Zoenaturals home"
     >
@@ -177,17 +177,17 @@ function MegaMenu({ close }: { close: () => void }) {
             Most loved
           </span>
           <Heading level={3} className="mt-4 text-2xl">
-            Everyday bestsellers
+            Our full collection
           </Heading>
           <p className="mt-2 text-sm leading-6 text-walnut/70">
-            The plant-powered staples our community returns to.
+            Explore every published product, from daily essentials to new blends.
           </p>
           <NavLink
             href="#bestsellers"
             className="mt-5 inline-flex font-bold text-deep-fern"
             onClick={close}
           >
-            Shop bestsellers <span aria-hidden="true">→</span>
+            Explore the collection <span aria-hidden="true">→</span>
           </NavLink>
         </div>
       </div>
@@ -229,9 +229,6 @@ function Header({
           </NavLink>
           <NavLink href="/journal" className="px-3 py-2 text-sm font-semibold">
             Journal
-          </NavLink>
-          <NavLink href="/admin" className="px-3 py-2 text-sm font-semibold">
-            Admin
           </NavLink>
         </nav>
         <div className="ml-auto flex items-center gap-1 lg:ml-2">
@@ -280,7 +277,7 @@ function BotanicalArt({ type }: { type: string }) {
   )
 }
 
-function useBestsellers() {
+function useHomeProducts() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -305,19 +302,12 @@ function useBestsellers() {
             : Array.isArray(payload.data)
               ? payload.data
               : []
-        const markedBestsellers = rawProducts.filter(
-          (product) =>
-            product.bestseller || product.isBestseller || product.is_bestseller,
-        )
-        const selected = markedBestsellers.length
-          ? markedBestsellers
-          : rawProducts
-        setProducts(extractProducts(selected).slice(0, 10))
+        setProducts(extractProducts(rawProducts))
       } catch (reason) {
         if (reason instanceof DOMException && reason.name === "AbortError")
           return
         setError(
-          "We couldn't load our bestsellers right now. Please try again in a moment.",
+          "We couldn't load the product collection right now. Please try again in a moment.",
         )
       } finally {
         if (!controller.signal.aborted) setLoading(false)
@@ -385,8 +375,8 @@ function ProductCard({ product, index }: ProductCardProps) {
   )
 }
 
-function Bestsellers() {
-  const { products, loading, error, retry } = useBestsellers()
+function HomeProducts() {
+  const { products, loading, error, retry } = useHomeProducts()
   const carouselRef = useRef<HTMLDivElement>(null)
 
   function scroll(direction: number) {
@@ -398,9 +388,9 @@ function Bestsellers() {
       <div className="mx-auto max-w-7xl px-5 lg:px-8">
         <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div>
-            <p className="eyebrow">Community favourites</p>
+            <p className="eyebrow">Recently added & community-loved</p>
             <Heading level={2} className="mt-3 text-4xl sm:text-5xl">
-              Naturally, our bestsellers.
+              Explore our collection.
             </Heading>
           </div>
           <div className="flex items-center gap-2">
@@ -424,7 +414,7 @@ function Bestsellers() {
         {loading && (
           <div
             className="mt-10 flex gap-6 overflow-hidden"
-            aria-label="Loading bestsellers"
+            aria-label="Loading products"
           >
             {[0, 1, 2, 3].map((item) => (
               <div key={item} className="w-[78vw] shrink-0 sm:w-80">
@@ -456,7 +446,7 @@ function Bestsellers() {
 
         {!loading && !error && products.length === 0 && (
           <p className="mt-10 rounded-card bg-sage/15 p-8 text-center text-walnut/70">
-            No bestsellers are available just yet. Please check back soon.
+            No products have been published yet. Please check back soon.
           </p>
         )}
 
@@ -592,7 +582,7 @@ export function HomePage() {
         </div>
       </section>
 
-      <Bestsellers />
+      <HomeProducts />
 
       <section className="border-y border-walnut/10 bg-cream">
         <div className="mx-auto grid max-w-7xl grid-cols-2 px-5 py-8 lg:grid-cols-4 lg:px-8">
@@ -781,7 +771,14 @@ function Footer() {
     <footer className="bg-deep-fern pb-28 pt-16 text-cream lg:pb-10 lg:pt-20">
       <div className="mx-auto grid max-w-7xl gap-12 px-5 lg:grid-cols-[1.4fr_2fr] lg:px-8">
         <div>
-          <p className="font-heading text-3xl">zoenaturals</p>
+          <NavLink
+            href="/"
+            variant="footer"
+            className="inline-block font-heading text-3xl text-cream"
+            aria-label="Zoenaturals home"
+          >
+            zoenaturals
+          </NavLink>
           <p className="mt-4 max-w-sm leading-7 text-cream/70">
             Plant-based wellness for feeling grounded, nourished, and wholly
             yourself.
@@ -803,10 +800,10 @@ function Footer() {
               ["/journal", "Journal"],
             ],
             [
-              "Admin",
-              ["/admin", "Product portal"],
-              ["/admin", "Price editor"],
-              ["/admin", "Publishing tools"],
+              "Support",
+              ["/faq", "FAQs"],
+              ["/contact", "Contact us"],
+              ["/account", "Your account"],
             ],
           ].map(([title, ...links]) => (
             <div key={title}>
