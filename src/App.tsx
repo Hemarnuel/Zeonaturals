@@ -6,36 +6,56 @@ import { Button, Heading, Icon, NavLink, TextField } from "./components/ui"
 
 const goals = ["Sleep", "Energy", "Immunity", "Digestion", "Skin & Hair"]
 const categories = ["Herbal Teas", "Supplements", "Superfoods", "Body Care"]
+const herbalTeaImages = [
+  {
+    src: "https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&w=900&q=80",
+    alt: "Freshly brewed herbal tea served in a glass cup",
+  },
+  {
+    src: "https://images.unsplash.com/photo-1515823064-d6e0c04616a7?auto=format&fit=crop&w=900&q=80",
+    alt: "Matcha tea whisked into a bright green latte",
+  },
+]
 const goalCards = [
   {
     name: "Sleep",
     description: "Rest deeply",
     icon: "moon",
-    tone: "bg-deep-fern text-cream",
+    tone: "bg-[#EEF6EC] text-walnut border border-[#D9E7D4]",
+    badge: "bg-[#D9E7D4] text-deep-fern",
+    glow: "bg-[#D5E9C9]",
   },
   {
     name: "Energy",
     description: "Move brightly",
     icon: "sun",
-    tone: "bg-gold/55 text-walnut",
+    tone: "bg-[#FFF7E8] text-walnut border border-[#F2E2BC]",
+    badge: "bg-[#F9E6B7] text-walnut",
+    glow: "bg-[#F6D99A]",
   },
   {
     name: "Immunity",
     description: "Stay supported",
     icon: "shield",
-    tone: "bg-sage text-walnut",
+    tone: "bg-[#F4F1EA] text-walnut border border-[#E3DCC8]",
+    badge: "bg-[#DDE4C6] text-deep-fern",
+    glow: "bg-[#CDD9B5]",
   },
   {
     name: "Digestion",
     description: "Feel balanced",
     icon: "sprout",
-    tone: "bg-terracotta/75 text-white",
+    tone: "bg-[#FCEFE9] text-walnut border border-[#F3D3C0]",
+    badge: "bg-[#F7D0B8] text-walnut",
+    glow: "bg-[#F4B89B]",
   },
   {
     name: "Skin & Hair",
     description: "Glow naturally",
     icon: "sparkle",
-    tone: "bg-walnut text-cream",
+    tone: "bg-[#F3EEE9] text-walnut border border-[#E4D5C5]",
+    badge: "bg-[#E8D7C5] text-walnut",
+    glow: "bg-[#D9BF9F]",
   },
 ]
 
@@ -262,21 +282,6 @@ function Header({
   )
 }
 
-function BotanicalArt({ type }: { type: string }) {
-  return (
-    <div className="relative grid h-64 place-items-center overflow-hidden rounded-card">
-      <div className="absolute -right-10 -top-10 size-36 rounded-full border border-walnut/10" />
-      <div className="absolute -bottom-12 -left-8 size-40 rounded-full border border-walnut/10" />
-      <div className="grid size-28 place-items-center rounded-full bg-cream/70 text-deep-fern shadow-soft">
-        <Icon
-          name={type === "moon" ? "moon" : type === "sun" ? "sun" : "sprout"}
-          size="xl"
-        />
-      </div>
-    </div>
-  )
-}
-
 function useHomeProducts() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
@@ -328,28 +333,25 @@ function useHomeProducts() {
 
 function ProductCard({ product, index }: ProductCardProps) {
   const { addItem } = useCart()
-  const tones = [
-    "bg-sage/35",
-    "bg-gold/25",
-    "bg-terracotta/15",
-    "bg-deep-fern/15",
-  ]
-  const art = index % 3 === 0 ? "moon" : index % 3 === 1 ? "sprout" : "sun"
+  const fallbackImage = herbalTeaImages[index % herbalTeaImages.length]
+  const [imageSource, setImageSource] = useState(product.image || fallbackImage.src)
+
+  useEffect(() => {
+    setImageSource(product.image || fallbackImage.src)
+  }, [product.image, fallbackImage.src])
 
   return (
     <article className="w-[78vw] shrink-0 snap-start sm:w-80">
-      <div
-        className={`overflow-hidden rounded-card ${tones[index % tones.length]}`}
-      >
-        {product.image ? (
-          <img
-            src={product.image}
-            alt={product.name}
-            className="h-72 w-full object-cover transition duration-500 hover:scale-105"
-          />
-        ) : (
-          <BotanicalArt type={art} />
-        )}
+      <div className="overflow-hidden rounded-card bg-sage/20">
+        <img
+          src={imageSource}
+          alt={product.image && imageSource === product.image ? product.name : fallbackImage.alt}
+          onError={() => {
+            if (imageSource !== fallbackImage.src) setImageSource(fallbackImage.src)
+          }}
+          loading="lazy"
+          className="h-72 w-full object-cover transition duration-500 hover:scale-105"
+        />
       </div>
       <p className="mt-5 text-xs font-bold uppercase tracking-widest text-deep-fern/80">
         {product.category}
@@ -521,27 +523,21 @@ export function HomePage() {
             </span>
           </div>
         </div>
-        <div className="relative min-h-[30rem] overflow-hidden rounded-card bg-sage p-8 sm:p-12">
-          <div className="absolute left-10 top-10 size-3 rounded-full bg-gold" />
-          <div className="absolute bottom-12 right-12 size-2 rounded-full bg-gold" />
-          <div className="absolute -right-20 -top-16 size-72 rounded-full border border-cream/40" />
-          <div className="absolute -bottom-24 -left-16 size-80 rounded-full border border-cream/40" />
-          <div className="relative flex h-full min-h-[24rem] flex-col items-center justify-center">
-            <div className="grid size-48 place-items-center rounded-full bg-cream shadow-soft">
-              <div className="text-center text-deep-fern">
-                <Icon name="sprout" size="xl" />
-                <p className="mt-3 font-heading text-xl">daily balance</p>
-                <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em]">
-                  botanical blend
-                </p>
-              </div>
-            </div>
-            <div className="absolute bottom-0 left-0 rounded-card bg-cream/95 p-4 shadow-soft">
-              <p className="text-xs font-bold uppercase tracking-wider text-deep-fern">
-                Start small
-              </p>
-              <p className="mt-1 font-heading text-lg">One ritual at a time.</p>
-            </div>
+        <div className="relative min-h-[25rem] overflow-hidden rounded-card bg-deep-fern sm:min-h-[30rem]">
+          <img
+            src="https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&w=1400&q=85"
+            alt="Herbal tea steeping in a glass cup beside tea bags"
+            fetchPriority="high"
+            className="absolute inset-0 size-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-walnut/80 via-walnut/15 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 p-6 text-cream sm:p-9">
+            <p className="text-xs font-bold uppercase tracking-widest text-gold">
+              Brew a softer moment
+            </p>
+            <p className="mt-2 max-w-sm font-heading text-3xl leading-tight sm:text-4xl">
+              Let the day steep away.
+            </p>
           </div>
         </div>
       </section>
@@ -554,25 +550,30 @@ export function HomePage() {
               Shop by goal
             </Heading>
           </div>
-          <div className="mt-10 grid grid-cols-2 gap-4 lg:grid-cols-5">
+          <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {goalCards.map((goal) => (
               <NavLink
                 key={goal.name}
                 href={`/shop?goal=${encodeURIComponent(goal.name)}`}
-                className={`group relative min-h-52 overflow-hidden rounded-card p-5 ${goal.tone}`}
+                className={`group relative flex min-h-[220px] flex-col justify-between overflow-hidden rounded-[1.25rem] p-4 shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-lg ${goal.tone}`}
               >
-                <div className="absolute -right-7 -top-7 size-28 rounded-full border border-current opacity-20 transition duration-500 group-hover:scale-125" />
-                <span className="grid size-11 place-items-center rounded-full bg-cream/25">
-                  <Icon name={goal.icon} />
-                </span>
-                <div className="absolute bottom-5 left-5">
-                  <p className="text-xs font-semibold uppercase tracking-widest opacity-70">
+                <div className={`absolute -right-6 -top-6 size-24 rounded-full opacity-80 blur-2xl transition duration-500 group-hover:scale-110 ${goal.glow}`} />
+                <div className="relative z-10 flex items-center justify-between">
+                  <span className={`grid size-11 place-items-center rounded-2xl shadow-sm ${goal.badge}`}>
+                    <Icon name={goal.icon} />
+                  </span>
+                  <span className="rounded-full bg-white/65 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.18em] text-walnut/70">
+                    Goal
+                  </span>
+                </div>
+                <div className="relative z-10 mt-8">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-walnut/60">
                     {goal.description}
                   </p>
-                  <p className="mt-1 font-heading text-2xl font-semibold">
+                  <p className="mt-2 font-heading text-[2rem] leading-none tracking-tight">
                     {goal.name}
                   </p>
-                  <span className="mt-3 inline-flex items-center gap-1 text-xs font-bold">
+                  <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold">
                     Explore <Icon name="arrowRight" size="xs" />
                   </span>
                 </div>
@@ -668,7 +669,7 @@ export function HomePage() {
               </p>
               <Heading
                 level={2}
-                className="mt-3 max-w-2xl text-4xl text-cream sm:text-5xl"
+                className="mt-3 max-w-2xl text-4xl text-white sm:text-5xl"
               >
                 Your wellness ritual, right on time.
               </Heading>
