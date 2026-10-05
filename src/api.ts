@@ -536,9 +536,13 @@ export async function apiRequest<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  if (IS_DEMO_API) {
+  const pathname = new URL(path, "http://localhost").pathname
+  const useSupabaseCatalog = isSupabaseConfigured && isProductRequest(pathname)
+
+  if (IS_DEMO_API || useSupabaseCatalog) {
     const mocked = await mockApiRequest<T>(path, init)
     if (mocked !== null) return mocked
+    if (useSupabaseCatalog) throw new ApiError(`Product not found: ${path}`, 404)
     throw new ApiError(`The demo API does not implement ${path}.`, 404)
   }
 
