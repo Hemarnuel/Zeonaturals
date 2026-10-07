@@ -1303,13 +1303,6 @@ export function AdminPage() {
   const [csvImporting, setCsvImporting] = useState(false)
   const productFormRef = useRef<HTMLFormElement>(null)
 
-  const [searchQuery, setSearchQuery] = useState("")
-  const [categoryFilter, setCategoryFilter] = useState("")
-  const [goalFilter, setGoalFilter] = useState("")
-  const [statusFilter, setStatusFilter] = useState<"all" | "published" | "draft">("all")
-  const [sortBy, setSortBy] = useState<"newest" | "name" | "price" | "stock" | "sales">("newest")
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
-
   useEffect(() => {
     let active = true
     async function initialize() {
@@ -1477,71 +1470,7 @@ export function AdminPage() {
     }
   }
 
-  const filteredProducts = useMemo(() => {
-    let result = [...products]
-
-    if (searchQuery.trim()) {
-      const query = searchQuery.trim().toLowerCase()
-      result = result.filter((product) =>
-        product.name.toLowerCase().includes(query) ||
-        product.slug.toLowerCase().includes(query) ||
-        product.category.toLowerCase().includes(query) ||
-        product.goal.toLowerCase().includes(query)
-      )
-    }
-
-    if (categoryFilter) {
-      result = result.filter((product) => product.category === categoryFilter)
-    }
-
-    if (goalFilter) {
-      result = result.filter((product) => product.goal === goalFilter)
-    }
-
-    if (statusFilter === "published") {
-      result = result.filter((product) => product.published !== false)
-    } else if (statusFilter === "draft") {
-      result = result.filter((product) => product.published === false)
-    }
-
-    result.sort((a, b) => {
-      let aVal: string | number = ""
-      let bVal: string | number = ""
-
-      switch (sortBy) {
-        case "name":
-          aVal = a.name.toLowerCase()
-          bVal = b.name.toLowerCase()
-          break
-        case "price":
-          aVal = a.price
-          bVal = b.price
-          break
-        case "stock":
-          aVal = a.stock
-          bVal = b.stock
-          break
-        case "sales":
-          aVal = a.salesCount ?? 0
-          bVal = b.salesCount ?? 0
-          break
-        case "newest":
-        default:
-          aVal = a.id
-          bVal = b.id
-          break
-      }
-
-      if (aVal < bVal) return sortOrder === "asc" ? -1 : 1
-      if (aVal > bVal) return sortOrder === "asc" ? 1 : -1
-      return 0
-    })
-
-    return result
-  }, [products, searchQuery, categoryFilter, goalFilter, statusFilter, sortBy, sortOrder])
-
-  const allCategories = useMemo(() => [...new Set(products.map((p) => p.category).filter(Boolean))].sort(), [products])
-  const allGoals = useMemo(() => [...new Set(products.map((p) => p.goal).filter(Boolean))].sort(), [products])
+  const filteredProducts = useMemo(() => [...products], [products])
 
   if (isSupabaseConfigured && authLoading) {
     return (
@@ -1855,91 +1784,8 @@ export function AdminPage() {
             <div>
               <Heading level={2} className="text-2xl">All products</Heading>
               <p className="mt-1 text-sm text-walnut/65">
-                {filteredProducts.length} of {products.length} products
+                {products.length} products
               </p>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  setSearchQuery("")
-                  setCategoryFilter("")
-                  setGoalFilter("")
-                  setStatusFilter("all")
-                }}
-                disabled={!searchQuery && !categoryFilter && !goalFilter && statusFilter === "all"}
-              >
-                Clear filters
-              </Button>
-            </div>
-          </div>
-
-          <div className="mb-6 rounded-card bg-sage/15 p-4">
-            <p className="text-xs font-bold uppercase tracking-wider text-deep-fern">Filters</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <TextField
-                placeholder="Search name, slug, category, goal"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                aria-label="Search products"
-              />
-              <select
-                value={categoryFilter}
-                onChange={(event) => setCategoryFilter(event.target.value)}
-                className="h-11 rounded-card border border-walnut/15 bg-white/55 px-4 text-sm"
-                aria-label="Filter by category"
-              >
-                <option value="">All categories</option>
-                {allCategories.map((category) => (
-                  <option key={category} value={category}>{category}</option>
-                ))}
-              </select>
-              <select
-                value={goalFilter}
-                onChange={(event) => setGoalFilter(event.target.value)}
-                className="h-11 rounded-card border border-walnut/15 bg-white/55 px-4 text-sm"
-                aria-label="Filter by goal"
-              >
-                <option value="">All goals</option>
-                {allGoals.map((goal) => (
-                  <option key={goal} value={goal}>{goal}</option>
-                ))}
-              </select>
-              <select
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value as "all" | "published" | "draft")}
-                className="h-11 rounded-card border border-walnut/15 bg-white/55 px-4 text-sm"
-                aria-label="Filter by status"
-              >
-                <option value="all">All statuses</option>
-                <option value="published">Published</option>
-                <option value="draft">Draft</option>
-              </select>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold uppercase tracking-wider text-walnut/65">Sort by</span>
-                <select
-                  value={`${sortBy}:${sortOrder}`}
-                  onChange={(event) => {
-                    const [by, order] = event.target.value.split(":")
-                    setSortBy(by as "newest" | "name" | "price" | "stock" | "sales")
-                    setSortOrder(order as "asc" | "desc")
-                  }}
-                  className="h-11 rounded-card border border-walnut/15 bg-white/55 px-4 text-sm"
-                  aria-label="Sort products"
-                >
-                  <option value="newest:desc">Newest first</option>
-                  <option value="newest:asc">Oldest first</option>
-                  <option value="name:asc">Name A–Z</option>
-                  <option value="name:desc">Name Z–A</option>
-                  <option value="price:asc">Price low to high</option>
-                  <option value="price:desc">Price high to low</option>
-                  <option value="stock:asc">Stock low to high</option>
-                  <option value="stock:desc">Stock high to low</option>
-                  <option value="sales:asc">Sales low to high</option>
-                  <option value="sales:desc">Sales high to low</option>
-                </select>
-              </div>
             </div>
           </div>
 

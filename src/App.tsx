@@ -549,17 +549,40 @@ function ProductShelf({ title, sort }: { title: string; sort?: string }) {
   }, [sort])
   if (!loading && !error && products.length === 0) return null
   return (
-    <section className="py-12">
-      <div className="mb-6 flex items-end justify-between gap-4">
+    <section className="py-16">
+      <div className="mb-8 flex items-end justify-between gap-4">
         <Heading level={2} className="text-3xl sm:text-4xl">{title}</Heading>
         <a href={`/shop${sort ? `?sort=${sort}` : ""}`} className="shrink-0 font-semibold text-deep-fern">View all →</a>
       </div>
       {error ? (
         <p role="alert" className="rounded-card bg-terracotta/10 p-5 text-sm text-walnut">{error}</p>
       ) : loading ? (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{[0, 1, 2, 3].map((item) => <div key={item} className="animate-pulse"><div className="h-64 rounded-card bg-sage/20" /><div className="mt-4 h-5 w-2/3 rounded bg-sage/25" /></div>)}</div>
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">{[0, 1, 2, 3].map((item) => <div key={item} className="animate-pulse"><div className="h-64 rounded-card bg-sage/20" /></div>)}</div>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{products.map((product, index) => <ProductCard key={product.id} product={product} index={index} />)}</div>
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+          {products.map((product, index) => (
+            <NavLink
+              key={product.id}
+              href={`/product/${encodeURIComponent(product.slug)}`}
+              className="block group"
+            >
+              <div className="relative overflow-hidden rounded-card bg-sage/20">
+                <img
+                  src={product.image || herbalTeaImages[index % herbalTeaImages.length].src}
+                  alt={product.image && product.image === product.image ? product.name : herbalTeaImages[index % herbalTeaImages.length].alt}
+                  className="h-72 w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+              </div>
+              <p className="mt-4 text-xs font-bold uppercase tracking-widest text-deep-fern/80">
+                {product.category}
+              </p>
+              <p className="font-heading text-lg font-semibold">{product.name}</p>
+              <p className="mt-1 font-semibold text-walnut/70">
+                {formatNaira(product.price)}
+              </p>
+            </NavLink>
+          ))}
+        </div>
       )}
     </section>
   )
