@@ -1717,79 +1717,109 @@ export function AdminPage() {
             )}
           </div>
           <div className="grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-sm font-bold">Product name</label>
+              <TextField
+                required
+                value={form.name}
+                onChange={(event) => updateField("name", event.target.value)}
+                placeholder="Product name"
+                aria-label="Product name"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-bold">Slug</label>
+              <TextField
+                value={form.slug}
+                onChange={(event) => updateField("slug", event.target.value)}
+                placeholder="Slug"
+                aria-label="Slug"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-bold">Price (₦)</label>
+              <TextField
+                required
+                type="number"
+                value={form.price}
+                onChange={(event) => updateField("price", Number(event.target.value))}
+                placeholder="Price"
+                aria-label="Price"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-bold">Stock</label>
+              <TextField
+                required
+                type="number"
+                value={form.stock}
+                onChange={(event) => updateField("stock", Number(event.target.value))}
+                placeholder="Stock"
+                aria-label="Stock"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-bold">Category</label>
+              <TextField
+                value={form.category}
+                onChange={(event) => updateField("category", event.target.value)}
+                placeholder="Category"
+                aria-label="Category"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-bold">Goal</label>
+              <TextField
+                value={form.goal}
+                onChange={(event) => updateField("goal", event.target.value)}
+                placeholder="Goal"
+                aria-label="Goal"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-bold">Image URL</label>
             <TextField
-              required
-              value={form.name}
-              onChange={(event) => updateField("name", event.target.value)}
-              placeholder="Product name"
-              aria-label="Product name"
-            />
-            <TextField
-              value={form.slug}
-              onChange={(event) => updateField("slug", event.target.value)}
-              placeholder="Slug"
-              aria-label="Slug"
-            />
-            <TextField
-              required
-              type="number"
-              value={form.price}
-              onChange={(event) => updateField("price", Number(event.target.value))}
-              placeholder="Price"
-              aria-label="Price"
-            />
-            <TextField
-              required
-              type="number"
-              value={form.stock}
-              onChange={(event) => updateField("stock", Number(event.target.value))}
-              placeholder="Stock"
-              aria-label="Stock"
-            />
-            <TextField
-              value={form.category}
-              onChange={(event) => updateField("category", event.target.value)}
-              placeholder="Category"
-              aria-label="Category"
-            />
-            <TextField
-              value={form.goal}
-              onChange={(event) => updateField("goal", event.target.value)}
-              placeholder="Goal"
-              aria-label="Goal"
+              value={form.image}
+              onChange={(event) => updateField("image", event.target.value)}
+              placeholder="Image URL"
+              aria-label="Image URL"
             />
           </div>
 
-          <TextField
-            value={form.image}
-            onChange={(event) => updateField("image", event.target.value)}
-            placeholder="Image URL"
-            aria-label="Image URL"
-          />
+          <div>
+            <label className="mb-1 block text-sm font-bold">Product description</label>
+            <TextArea
+              required
+              value={form.description}
+              onChange={(event) => updateField("description", event.target.value)}
+              placeholder="Product description"
+              aria-label="Product description"
+            />
+          </div>
 
-          <TextArea
-            required
-            value={form.description}
-            onChange={(event) => updateField("description", event.target.value)}
-            placeholder="Product description"
-            aria-label="Product description"
-          />
+          <div>
+            <label className="mb-1 block text-sm font-bold">Ingredients</label>
+            <TextArea
+              required
+              value={form.ingredients}
+              onChange={(event) => updateField("ingredients", event.target.value)}
+              placeholder="Ingredients"
+              aria-label="Ingredients"
+            />
+          </div>
 
-          <TextArea
-            required
-            value={form.ingredients}
-            onChange={(event) => updateField("ingredients", event.target.value)}
-            placeholder="Ingredients"
-            aria-label="Ingredients"
-          />
-
-          <TextArea
-            required
-            value={form.howToUse}
-            onChange={(event) => updateField("howToUse", event.target.value)}
-            placeholder="How to use"
-            aria-label="How to use"
-          />
+          <div>
+            <label className="mb-1 block text-sm font-bold">How to use</label>
+            <TextArea
+              required
+              value={form.howToUse}
+              onChange={(event) => updateField("howToUse", event.target.value)}
+              placeholder="How to use"
+              aria-label="How to use"
+            />
+          </div>
 
           <div className="rounded-card bg-sage/15 p-4">
             <p className="text-xs font-bold uppercase tracking-wider text-deep-fern">Product status</p>
@@ -1913,37 +1943,30 @@ export function AdminPage() {
             </div>
           </div>
 
-          <div className="mt-5 space-y-4">
-            {filteredProducts.length === 0 ? (
-              <p className="text-sm text-walnut/60">
-                {products.length === 0 ? "No admin products yet." : "No products match the current filters."}
-              </p>
-            ) : (
-              filteredProducts.map((product) => (
-                <article key={product.id} className="rounded-card border border-walnut/10 bg-cream p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="font-heading text-xl">{product.name}</p>
-                      <p className="mt-1 text-sm text-walnut/65">
-                        {product.goal} · {product.category} · ₦{product.price.toLocaleString()}
-                      </p>
-                    </div>
-                    <span className="rounded-full bg-sage/20 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-deep-fern">
-                      {product.published === false ? "Draft" : "Live"}
-                    </span>
-                  </div>
-                  <div className="mt-4 flex gap-2">
-                    <Button variant="secondary" onClick={() => handleEdit(product)}>
-                      Edit
-                    </Button>
-                    <Button variant="secondary" onClick={() => handleDelete(product.id)}>
-                      Remove
-                    </Button>
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
+           <div className="mt-5 space-y-4">
+             {filteredProducts.length === 0 ? (
+               <p className="text-sm text-walnut/60">
+                 {products.length === 0 ? "No admin products yet." : "No products match the current filters."}
+               </p>
+             ) : (
+               filteredProducts.slice(0, 5).map((product) => (
+                 <article key={product.id} className="flex items-start gap-3 rounded-card border border-walnut/10 bg-cream p-3">
+                   <img src={product.image || ""} alt={product.name} className="size-14 shrink-0 rounded-card object-cover bg-sage/20" />
+                   <div className="min-w-0 flex-1">
+                     <p className="truncate font-heading text-base">{product.name}</p>
+                     <p className="text-xs text-walnut/65">{product.goal} · {product.category} · ₦{product.price.toLocaleString()}</p>
+                   </div>
+                   <span className="rounded-full bg-sage/20 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-deep-fern whitespace-nowrap">
+                     {product.published === false ? "Draft" : "Live"}
+                   </span>
+                   <div className="flex flex-col gap-1">
+                     <Button variant="secondary" onClick={() => handleEdit(product)}>Edit</Button>
+                     <Button variant="secondary" onClick={() => handleDelete(product.id)}>Remove</Button>
+                   </div>
+                 </article>
+               ))
+             )}
+           </div>
         </div>
       </div>
     </main>

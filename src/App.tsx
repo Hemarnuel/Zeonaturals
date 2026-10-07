@@ -180,13 +180,33 @@ function SearchBox({
 }
 
 function MegaMenu({ close }: { close: () => void }) {
+  const [goalsList, setGoalsList] = useState<string[]>(goals);
+  const [categoriesList, setCategoriesList] = useState<string[]>(categories);
+
+  useEffect(() => {
+    let active = true;
+    apiRequest<any>("/api/categories")
+      .then((payload) => {
+        if (active) {
+          if (Array.isArray(payload.goals) && payload.goals.length) {
+            setGoalsList(payload.goals);
+          }
+          if (Array.isArray(payload.categories) && payload.categories.length) {
+            setCategoriesList(payload.categories);
+          }
+        }
+      })
+      .catch((error) => console.error("Could not load product categories:", error));
+    return () => { active = false };
+  }, []);
+
   return (
     <div className="absolute inset-x-0 top-full border-t border-walnut/10 bg-cream shadow-soft">
       <div className="mx-auto grid max-w-7xl grid-cols-[1.5fr_1fr_1fr] gap-12 px-8 py-9">
         <div>
           <p className="eyebrow">Shop by goal</p>
           <div className="mt-5 grid grid-cols-2 gap-x-8 gap-y-3">
-            {goals.map((goal) => (
+            {goalsList.map((goal) => (
               <NavLink
                 key={goal}
                 href={`/shop?goal=${encodeURIComponent(goal)}`}
@@ -200,7 +220,7 @@ function MegaMenu({ close }: { close: () => void }) {
         <div>
           <p className="eyebrow">Shop by category</p>
           <div className="mt-5 flex flex-col gap-3">
-            {categories.map((category) => (
+            {categoriesList.map((category) => (
               <NavLink
                 key={category}
                 href={`/shop?category=${encodeURIComponent(category)}`}
@@ -231,7 +251,7 @@ function MegaMenu({ close }: { close: () => void }) {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function Header({
@@ -505,12 +525,52 @@ function GoalProductShelf({ goal }: { goal: string }) {
   )
 }
 
-function GoalCollections({ availableGoals }: { availableGoals: string[] }) {
-  const goalsForHome = ["Sleep", "Energy", "Immunity", "Digestion"].filter((goal) => availableGoals.includes(goal))
+function ProductShelf({ title, sort }: { title: string; sort?: string }) {
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError("")
+    const url = new URL("/api/products", "http://localhost")
+    url.searchParams.set("limit", "4")
+    if (sort) {
+      url.searchParams.set("sort", sort)
+    }
+    apiRequest<any>(url.toString())
+      .then((payload) => { if (active) setProducts(extractProducts(payload).slice(0, 4)) })
+      .catch((reason) => {
+        if (!active) return
+        setError(reason instanceof Error ? reason.message : `Could not load products.`)
+        console.error(`Could not load products:`, reason)
+      })
+      .finally(() => { if (active) setLoading(false) })
+  }, [sort])
+  if (!loading && !error && products.length === 0) return null
+  return (
+    <section className="py-12">
+      <div className="mb-6 flex items-end justify-between gap-4">
+        <Heading level={2} className="text-3xl sm:text-4xl">{title}</Heading>
+        <a href={`/shop${sort ? `?sort=${sort}` : ""}`} className="shrink-0 font-semibold text-deep-fern">View all →</a>
+      </div>
+      {error ? (
+        <p role="alert" className="rounded-card bg-terracotta/10 p-5 text-sm text-walnut">{error}</p>
+      ) : loading ? (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{[0, 1, 2, 3].map((item) => <div key={item} className="animate-pulse"><div className="h-64 rounded-card bg-sage/20" /><div className="mt-4 h-5 w-2/3 rounded bg-sage/25" /></div>)}</div>
+      ) : (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{products.map((product, index) => <ProductCard key={product.id} product={product} index={index} />)}</div>
+      )}
+    </section>
+  )
+}
+
+function GoalCollections() {
   return (
     <div id="bestsellers" className="bg-white/45 py-12 lg:py-16">
       <div className="mx-auto max-w-7xl px-5 lg:px-8">
-        {goalsForHome.map((goal) => <GoalProductShelf key={goal} goal={goal} />)}
+        <ProductShelf title="Newest Product" />
+        <ProductShelf title="Best Selling" sort="bestselling" />
         <div className="mt-5 text-center">
           <Button onClick={() => { window.location.href = "/shop" }}>Shop more</Button>
         </div>
@@ -522,19 +582,6 @@ function GoalCollections({ availableGoals }: { availableGoals: string[] }) {
 export function HomePage() {
   const [email, setEmail] = useState("")
   const [subscribed, setSubscribed] = useState(false)
-  const [availableGoals, setAvailableGoals] = useState<string[]>(goals)
-
-  useEffect(() => {
-    let active = true
-    apiRequest<any>("/api/categories")
-      .then((payload) => {
-        if (active && Array.isArray(payload.goals) && payload.goals.length) {
-          setAvailableGoals(payload.goals)
-        }
-      })
-      .catch((error) => console.error("Could not load product categories:", error))
-    return () => { active = false }
-  }, [])
 
   function joinNewsletter(event: FormEvent) {
     event.preventDefault()
@@ -617,7 +664,7 @@ export function HomePage() {
         </div>
       </section>
 
-      <GoalCollections availableGoals={availableGoals} />
+      <GoalCollections />
 
       <section
         id="our-story"
