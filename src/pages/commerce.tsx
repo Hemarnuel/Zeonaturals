@@ -1597,6 +1597,9 @@ export function AdminPage() {
         <Button variant="secondary" onClick={() => (window.location.href = "/shop")}>
           View shop
         </Button>
+        <Button variant="secondary" onClick={() => (window.location.href = "/admin/products")}>
+          View product list
+        </Button>
         {isSupabaseConfigured && (
           <Button
             variant="secondary"
@@ -1947,6 +1950,370 @@ export function AdminPage() {
   )
 }
 
+const PRODUCTS_PER_PAGE = 30
+
+export function ProductListPage() {
+  const [searchQuery, setSearchQuery] = useState("")
+  const [categoryFilter, setCategoryFilter] = useState("")
+  const [goalFilter, setGoalFilter] = useState("")
+  const [statusFilter, setStatusFilter] = useState<"all" | "published" | "draft">("all")
+  const [sortBy, setSortBy] = useState<"newest" | "name" | "price" | "stock" | "sales">("newest")
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [products, setProducts] = useState<Product[]>([])
+  const [notice, setNotice] = useState("")
+  const [adminUser, setAdminUser] = useState<{ id: string; email?: string } | null>(null)
+  const [authLoading, setAuthLoading] = useState(isSupabaseConfigured)
+
+  usePageMetadata(
+    "Product list | Admin portal",
+    "Manage your Zoenaturals product catalog with filters and pagination.",
+  )
+
+  useEffect(() => {
+    let active = true
+    async function initialize() {
+      if (!isSupabaseConfigured) {
+        setProducts(getAdminProducts())
+        return
+      }
+      try {
+        const user = await getAdminUser()
+        if (!active) return
+        setAdminUser(user)
+        if (user) setProducts(await listAdminProducts())
+      } catch (error) {
+        if (active) setNotice(error instanceof Error ? error.message : "Unable to load admin products.")
+      } finally {
+        if (active) setAuthLoading(false)
+      }
+    }
+    void initialize()
+    return () => { active = false }
+  }, [])
+
+  async function refreshProducts() {
+    setProducts(isSupabaseConfigured ? await listAdminProducts() : getAdminProducts())
+  }
+
+  async function togglePublished(product: Product) {
+    try {
+      if (isSupabaseConfigured) await saveRemoteProduct({ ...product, published: product.published !== false })
+      else saveProductRecord({ ...product, published: product.published !== false })
+      await refreshProducts()
+      setNotice(`Updated: ${product.name}`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Unable to update product.")
+    }
+  }
+
+  async function handleDelete(id: string) {
+    const product = products.find((item) => item.id === id)
+    if (!product || !window.confirm(`Remove "${product.name}" from the catalog?`)) return
+    try {
+      if (isSupabaseConfigured) await removeRemoteProduct(id)
+      else removeProductRecord(id)
+      await refreshProducts()
+      setNotice(`Product removed: ${product.name}`)
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Unable to remove product.")
+    }
+  }
+
+  const filteredProducts = useMemo(() => {
+    let result = [...products]
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.trim().toLowerCase()
+      result = result.filter((product) =>
+        product.name.toLowerCase().includes(query) ||
+        product.slug.toLowerCase().includes(query) ||
+        product.category.toLowerCase().includes(query) ||
+        product.goal.toLowerCase().includes(query)
+      )
+    }
+
+    if (categoryFilter) {
+      result = result.filter((product) => product.category === categoryFilter)
+    }
+
+    if (goalFilter) {
+      result = result.filter((product) => product.goal === goalFilter)
+    }
+
+    if (statusFilter === "published") {
+      result = result.filter((product) => product.published !== false)
+    } else if (statusFilter === "draft") {
+      result = result.filter((product) => product.published === false)
+    }
+
+    result.sort((a, b) => {
+      let aVal: string | number = ""
+      let bVal: string | number = ""
+
+      switch (sortBy) {
+        case "name":
+          aVal = a.name.toLowerCase()
+          bVal = b.name.toLowerCase()
+          break
+        case "price":
+          aVal = a.price
+          bVal = b.price
+          break
+        case "stock":
+          aVal = a.stock
+          bVal = b.stock
+          break
+        case "sales":
+          aVal = a.salesCount ?? 0
+          bVal = b.salesCount ?? 0
+          break
+        case "newest":
+        default:
+          aVal = a.id
+          bVal = b.id
+          break
+      }
+
+      if (aVal < bVal) return sortOrder === "asc" ? -1 : 1
+      if (aVal > bVal) return sortOrder === "asc" ? 1 : -1
+      return 0
+    })
+
+    return result
+  }, [products, searchQuery, categoryFilter, goalFilter, statusFilter, sortBy, sortOrder])
+
+  const allCategories = useMemo(() => [...new Set(products.map((p) => p.category).filter(Boolean))].sort(), [products])
+  const allGoals = useMemo(() => [...new Set(products.map((p) => p.goal).filter(Boolean))].sort(), [products])
+
+  const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE)
+  const paginatedProducts = filteredProducts.slice((currentPage - 1) * PRODUCTS_PER_PAGE, currentPage * PRODUCTS_PER_PAGE)
+
+  const pageNumbers = useMemo(() => {
+    const numbers: (number | string)[] = []
+    const maxVisible = 5
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) numbers.push(i)
+    } else {
+      numbers.push(1)
+      if (currentPage > 3) numbers.push("ellipsis")
+      const start = Math.max(2, currentPage - 1)
+      const end = Math.min(totalPages - 1, currentPage + 1)
+      for (let i = start; i <= end; i++) numbers.push(i)
+      if (currentPage < totalPages - 2) numbers.push("ellipsis")
+      numbers.push(totalPages)
+    }
+    return numbers
+  }, [currentPage, totalPages])
+
+  if (isSupabaseConfigured && authLoading) {
+    return (
+      <main className="mx-auto max-w-xl px-5 py-24 text-center">
+        <p className="eyebrow">Admin portal</p>
+        <Heading level={1} className="mt-3 text-3xl">Checking secure session</Heading>
+      </main>
+    )
+  }
+
+  if (isSupabaseConfigured && !adminUser) {
+    return (
+      <main className="mx-auto max-w-xl px-5 py-20 lg:py-28">
+        <p className="eyebrow">Admin portal</p>
+        <Heading level={1} className="mt-3 text-4xl">Sign in to manage products</Heading>
+        <p className="mt-4 text-walnut/65">Please sign in from the <a href="/admin" className="font-bold text-deep-fern">admin page</a>.</p>
+      </main>
+    )
+  }
+
+  return (
+    <main className="mx-auto max-w-7xl px-5 py-16 lg:px-8 lg:py-24">
+      <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="eyebrow">Admin portal</p>
+          <Heading level={1} className="mt-3 text-4xl sm:text-5xl">Product list</Heading>
+          <p className="mt-1 text-sm text-walnut/65">Manage your full product catalog with filters and pagination.</p>
+        </div>
+        <Button variant="secondary" onClick={() => (window.location.href = "/admin")}>
+          Back to admin
+        </Button>
+      </div>
+
+      {!isSupabaseConfigured && (
+        <div className="mb-8 rounded-card border border-gold/40 bg-gold/10 px-4 py-3 text-sm text-walnut">
+          Demo mode: product changes are saved only in this browser. Configure Supabase to enable secure shared storage.
+        </div>
+      )}
+
+      {notice && (
+        <div className="mb-8 rounded-card bg-sage/20 px-4 py-3 text-sm font-semibold text-deep-fern">
+          {notice}
+        </div>
+      )}
+
+      <div className="mb-6 rounded-card bg-sage/15 p-4">
+        <p className="text-xs font-bold uppercase tracking-wider text-deep-fern">Filters</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <TextField
+            placeholder="Search name, slug, category, goal"
+            value={searchQuery}
+            onChange={(event) => { setSearchQuery(event.target.value); setCurrentPage(1) }}
+            aria-label="Search products"
+          />
+          <select
+            value={categoryFilter}
+            onChange={(event) => { setCategoryFilter(event.target.value); setCurrentPage(1) }}
+            className="h-11 rounded-card border border-walnut/15 bg-white/55 px-4 text-sm"
+            aria-label="Filter by category"
+          >
+            <option value="">All categories</option>
+            {allCategories.map((category) => (
+              <option key={category} value={category}>{category}</option>
+            ))}
+          </select>
+          <select
+            value={goalFilter}
+            onChange={(event) => { setGoalFilter(event.target.value); setCurrentPage(1) }}
+            className="h-11 rounded-card border border-walnut/15 bg-white/55 px-4 text-sm"
+            aria-label="Filter by goal"
+          >
+            <option value="">All goals</option>
+            {allGoals.map((goal) => (
+              <option key={goal} value={goal}>{goal}</option>
+            ))}
+          </select>
+          <select
+            value={statusFilter}
+            onChange={(event) => { setStatusFilter(event.target.value as "all" | "published" | "draft"); setCurrentPage(1) }}
+            className="h-11 rounded-card border border-walnut/15 bg-white/55 px-4 text-sm"
+            aria-label="Filter by status"
+          >
+            <option value="all">All statuses</option>
+            <option value="published">Published</option>
+            <option value="draft">Draft</option>
+          </select>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-walnut/65">Sort by</span>
+            <select
+              value={`${sortBy}:${sortOrder}`}
+              onChange={(event) => {
+                const [by, order] = event.target.value.split(":")
+                setSortBy(by as "newest" | "name" | "price" | "stock" | "sales")
+                setSortOrder(order as "asc" | "desc")
+              }}
+              className="h-11 rounded-card border border-walnut/15 bg-white/55 px-4 text-sm"
+              aria-label="Sort products"
+            >
+              <option value="newest:desc">Newest first</option>
+              <option value="newest:asc">Oldest first</option>
+              <option value="name:asc">Name A–Z</option>
+              <option value="name:desc">Name Z–A</option>
+              <option value="price:asc">Price low to high</option>
+              <option value="price:desc">Price high to low</option>
+              <option value="stock:asc">Stock low to high</option>
+              <option value="stock:desc">Stock high to low</option>
+              <option value="sales:asc">Sales low to high</option>
+              <option value="sales:desc">Sales high to low</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <p className="mb-4 text-sm text-walnut/65">
+        {filteredProducts.length} of {products.length} products
+      </p>
+
+      <div className="space-y-3">
+        {paginatedProducts.length === 0 ? (
+          <p className="text-sm text-walnut/60">
+            {products.length === 0 ? "No admin products yet." : "No products match the current filters."}
+          </p>
+        ) : (
+          paginatedProducts.map((product) => (
+            <article key={product.id} className="rounded-card border border-walnut/10 bg-white/30 p-4 sm:p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="font-heading text-xl">{product.name}</p>
+                  <p className="mt-1 text-sm text-walnut/65">
+                    {product.goal} · {product.category} · ₦{product.price.toLocaleString()} · Stock: {product.stock}
+                  </p>
+                  {product.salesCount && product.salesCount > 0 && (
+                    <p className="mt-1 text-xs text-walnut/55">{product.salesCount} sold</p>
+                  )}
+                </div>
+                <span className="rounded-full bg-sage/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-deep-fern whitespace-nowrap ml-3">
+                  {product.published === false ? "Draft" : "Live"}
+                </span>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-2 items-center justify-end">
+                <Button
+                  variant="secondary"
+                  onClick={() => window.location.href = `/admin?edit=${product.id}`}
+                >
+                  Edit
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => togglePublished(product)}
+                >
+                  {product.published === false ? "Publish" : "Take down"}
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="text-terracotta hover:bg-terracotta hover:text-white"
+                  onClick={() => handleDelete(product.id)}
+                >
+                  Remove
+                </Button>
+              </div>
+            </article>
+          ))
+        )}
+      </div>
+
+      {totalPages > 1 && (
+        <nav className="mt-8 flex items-center justify-center" aria-label="Product pagination">
+          <div className="flex items-center gap-1 rounded-card border border-walnut/10 bg-white/35 px-3 py-2">
+            <Button
+              variant="secondary"
+              className="h-8 w-8 min-w-0 rounded px-2 text-sm"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage(currentPage - 1)}
+              aria-label="Previous page"
+            >
+              ‹
+            </Button>
+            {pageNumbers.map((number, index) =>
+              number === "ellipsis" ? (
+                <span key={`ellipsis-${index}`} className="px-2 text-sm text-walnut/50">
+                  …
+                </span>
+              ) : (
+                <Button
+                  key={number}
+                  variant={currentPage === number ? "primary" : "secondary"}
+                  className={currentPage === number ? "h-8 w-8 min-w-0 rounded bg-deep-fern px-2 text-sm text-white" : "h-8 w-8 min-w-0 rounded px-2 text-sm"}
+                  onClick={() => setCurrentPage(number as number)}
+                >
+                  {number}
+                </Button>
+              )
+            )}
+            <Button
+              variant="secondary"
+              className="h-8 w-8 min-w-0 rounded px-2 text-sm"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage(currentPage + 1)}
+              aria-label="Next page"
+            >
+              ›
+            </Button>
+          </div>
+        </nav>
+      )}
+    </main>
+  )
+}
+
 export function AboutPage() {
   return (
     <main className="mx-auto max-w-6xl px-5 py-16 lg:px-8 lg:py-24">
@@ -1974,9 +2341,9 @@ export function AboutPage() {
           </div>
         </div>
         <img
-          src="https://images.unsplash.com/photo-1556228578-8c89e6adf883?auto=format&fit=crop&w=1200&q=80"
+          src="https://images.unsplash.com/photo-1556228578-8c89e6adf883?auto=format&fit=crop&w=1200&q=85"
           alt="Natural wellness ingredients in a bright kitchen setting"
-          className="h-[30rem] w-full rounded-card object-cover"
+          className="h-[30rem] w-full rounded-card object-cover object-center"
         />
       </div>
     </main>
