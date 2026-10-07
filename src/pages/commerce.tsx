@@ -1,4 +1,4 @@
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react"
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router"
 import {
   ApiError,
@@ -29,7 +29,7 @@ import {
   PRODUCT_CSV_TEMPLATE,
 } from "../productCsv"
 import { useCart } from "../cart"
-import { IS_DEMO_API } from "../config"
+import { IS_DEMO_CHECKOUT } from "../config"
 import {
   Button,
   Heading,
@@ -642,7 +642,7 @@ export function CartPage() {
             </div>
             <div className="mt-7 flex flex-col items-end">
               <p className="text-sm text-walnut/60">
-                {IS_DEMO_API
+                {IS_DEMO_CHECKOUT
                   ? "Demo prices only. No payment will be collected."
                   : "Your payable total will be confirmed by the server."}
               </p>
@@ -731,10 +731,10 @@ export function CheckoutPage() {
           <Icon name="check" size="xl" />
         </span>
         <Heading level={1} className="mt-6 text-4xl">
-          {IS_DEMO_API ? "Demo order captured" : "Order received"}
+          {IS_DEMO_CHECKOUT ? "Demo order captured" : "Order received"}
         </Heading>
         <p className="mt-4 text-walnut/65">
-          {IS_DEMO_API
+          {IS_DEMO_CHECKOUT
             ? "This was a test only. No order was sent for fulfilment."
             : "Your pay-on-delivery order is awaiting fulfilment."}
         </p>
@@ -748,7 +748,7 @@ export function CheckoutPage() {
           {confirmation.amount !== undefined && (
             <>
               <p className="mt-5 text-xs font-bold uppercase tracking-wider">
-                {IS_DEMO_API ? "Simulated test amount" : "Server-confirmed amount"}
+                {IS_DEMO_CHECKOUT ? "Simulated test amount" : "Server-confirmed amount"}
               </p>
               <p className="mt-2 text-xl font-semibold">
                 {formatNaira(confirmation.amount)}
@@ -782,10 +782,10 @@ export function CheckoutPage() {
   return (
     <main>
       <PageIntro
-        eyebrow={IS_DEMO_API ? "Demo checkout" : "Secure checkout"}
+        eyebrow={IS_DEMO_CHECKOUT ? "Demo checkout" : "Secure checkout"}
         title="Complete your order"
         copy={
-          IS_DEMO_API
+          IS_DEMO_CHECKOUT
             ? "This is a checkout simulation. No payment will be collected and no order will be sent for fulfilment."
             : "Delivery details and payment, all in one simple step."
         }
@@ -844,11 +844,11 @@ export function CheckoutPage() {
               value="paystack"
               checked={paymentMethod === "paystack"}
               onChange={() => setPaymentMethod("paystack")}
-              label={IS_DEMO_API ? "Simulate online payment" : "Pay online with Paystack"}
+              label={IS_DEMO_CHECKOUT ? "Simulate online payment" : "Pay online with Paystack"}
               description={
-                IS_DEMO_API
+                IS_DEMO_CHECKOUT
                   ? "Completes a test flow only. No card, bank, or USSD payment is made."
-                  : "Card, bank transfer, or USSD. You’ll continue to Paystack securely."
+                  : "Card, bank transfer, or USSD. Items are reserved for 30 minutes while you pay."
               }
             />
             <RadioField
@@ -884,10 +884,10 @@ export function CheckoutPage() {
           </div>
           <div className="mt-5 rounded-card bg-sage/15 p-4">
             <p className="text-xs font-bold uppercase tracking-wider text-deep-fern">
-              {IS_DEMO_API ? "Simulated pricing" : "Secure server pricing"}
+              {IS_DEMO_CHECKOUT ? "Simulated pricing" : "Secure server pricing"}
             </p>
             <p className="mt-2 text-sm leading-6 text-walnut/65">
-              {IS_DEMO_API
+              {IS_DEMO_CHECKOUT
                 ? "This test amount is simulated in the browser. No payment will be collected."
                 : "The final payable amount is calculated and returned by the server—not this browser."}
             </p>
@@ -904,7 +904,7 @@ export function CheckoutPage() {
             {submitting
               ? "Submitting…"
               : paymentMethod === "paystack"
-                ? IS_DEMO_API
+                ? IS_DEMO_CHECKOUT
                   ? "Simulate payment"
                   : "Continue to Paystack"
                 : "Place order"}
@@ -928,15 +928,39 @@ export function ThankYouPage() {
       setState("unconfirmed")
       return
     }
-    apiRequest<any>(`/api/orders/verify/${encodeURIComponent(reference)}`)
-      .then((payload) => {
+    let active = true
+    let attempts = 0
+    let timeout: ReturnType<typeof setTimeout>
+
+    async function verifyPayment() {
+      try {
+        const payload = await apiRequest<any>(
+          `/api/orders/verify/${encodeURIComponent(reference)}`,
+        )
         const status = payload.status ?? payload.data?.status
+        if (!active) return
         if (status === "paid") {
           clearCart()
           setState("paid")
-        } else setState("unconfirmed")
-      })
-      .catch(() => setState("unconfirmed"))
+          return
+        }
+      } catch {
+        if (!active) return
+      }
+
+      attempts += 1
+      if (attempts >= 11) {
+        setState("unconfirmed")
+        return
+      }
+      timeout = setTimeout(verifyPayment, 3000)
+    }
+
+    void verifyPayment()
+    return () => {
+      active = false
+      clearTimeout(timeout)
+    }
   }, [reference])
 
   return (
@@ -955,10 +979,10 @@ export function ThankYouPage() {
             <Icon name="check" size="xl" />
           </span>
           <Heading level={1} className="mt-6 text-4xl">
-            {IS_DEMO_API ? "Demo payment complete" : "Order confirmed"}
+            {IS_DEMO_CHECKOUT ? "Demo payment complete" : "Order confirmed"}
           </Heading>
           <p className="mt-3 text-walnut/65">
-            {IS_DEMO_API
+            {IS_DEMO_CHECKOUT
               ? "This simulated payment did not charge you or create a real order."
               : "Thank you. We’ll send your order details by email."}
           </p>
@@ -1023,6 +1047,7 @@ export function AdminPage() {
   const [csvPreview, setCsvPreview] = useState<ProductCsvPreview | null>(null)
   const [csvParsing, setCsvParsing] = useState(false)
   const [csvImporting, setCsvImporting] = useState(false)
+  const productFormRef = useRef<HTMLFormElement>(null)
 
   useEffect(() => {
     let active = true
@@ -1074,16 +1099,31 @@ export function AdminPage() {
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
+    await persistForm(form.published ?? true)
+  }
+
+  async function persistForm(published: boolean) {
     try {
       const nextProduct = isSupabaseConfigured
-        ? await saveRemoteProduct({ ...form, published: true })
-        : saveProductRecord({ ...form, published: true })
+        ? await saveRemoteProduct({ ...form, published })
+        : saveProductRecord({ ...form, published })
       await refreshProducts()
-      setNotice(`Product published: ${nextProduct.name}`)
+      setNotice(
+        form.id
+          ? `Product updated: ${nextProduct.name}`
+          : published
+            ? `Product published: ${nextProduct.name}`
+            : `Draft saved: ${nextProduct.name}`,
+      )
       setForm(emptyForm)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Unable to save product.")
     }
+  }
+
+  function handleSaveDraft() {
+    if (!productFormRef.current?.reportValidity()) return
+    void persistForm(false)
   }
 
   function handleEdit(product: Product) {
@@ -1103,14 +1143,19 @@ export function AdminPage() {
       faq: product.faq,
       published: product.published ?? true,
     })
+    productFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
   }
 
   async function handleDelete(id: string) {
+    const product = products.find((item) => item.id === id)
+    if (!product || !window.confirm(`Remove "${product.name}" from the catalog?`)) return
+
     try {
       if (isSupabaseConfigured) await removeRemoteProduct(id)
       else removeProductRecord(id)
       await refreshProducts()
-      setNotice("Product removed from the entry portal.")
+      if (form.id === id) setForm(emptyForm)
+      setNotice(`Product removed: ${product.name}`)
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Unable to remove product.")
     }
@@ -1317,7 +1362,26 @@ export function AdminPage() {
       </section>
 
       <div className="grid gap-8 xl:grid-cols-[1.1fr_0.9fr]">
-        <form onSubmit={handleSubmit} className="space-y-5 rounded-card border border-walnut/10 bg-white/35 p-6">
+        <form
+          ref={productFormRef}
+          onSubmit={handleSubmit}
+          className="space-y-5 rounded-card border border-walnut/10 bg-white/35 p-6"
+        >
+          <div>
+            <Heading level={2} className="text-2xl">
+              {form.id ? `Edit ${form.name || "product"}` : "Add a product"}
+            </Heading>
+            {form.id && (
+              <Button
+                type="button"
+                variant="secondary"
+                className="mt-3"
+                onClick={() => setForm(emptyForm)}
+              >
+                Cancel editing
+              </Button>
+            )}
+          </div>
           <div className="grid gap-4 md:grid-cols-2">
             <TextField
               required
@@ -1394,27 +1458,29 @@ export function AdminPage() {
           />
 
           <div className="rounded-card bg-sage/15 p-4">
-            <p className="text-xs font-bold uppercase tracking-wider text-deep-fern">Publishing</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-deep-fern">Product status</p>
+            <label className="mt-3 flex items-center gap-2 text-sm font-semibold">
+              <input
+                type="checkbox"
+                checked={form.published !== false}
+                onChange={(event) => updateField("published", event.target.checked)}
+                className="size-4 accent-deep-fern"
+              />
+              Published
+            </label>
+            <p className="mt-2 text-xs leading-5 text-walnut/65">
+              Storefront visibility filtering is off for now, so all products appear in the shop regardless of status.
+            </p>
             <div className="mt-3 flex flex-wrap gap-3">
-              <Button type="submit">Publish product</Button>
+              <Button type="submit">
+                {form.id ? "Save changes" : "Save product"}
+              </Button>
               <Button
                 type="button"
                 variant="secondary"
-                onClick={() => {
-                  void (async () => {
-                    try {
-                      const savedDraft = isSupabaseConfigured
-                        ? await saveRemoteProduct({ ...form, published: false })
-                        : saveProductRecord({ ...form, published: false, id: form.id ?? `draft-${Date.now()}` })
-                      await refreshProducts()
-                      setNotice(`Draft saved: ${savedDraft.name}`)
-                    } catch (error) {
-                      setNotice(error instanceof Error ? error.message : "Unable to save draft.")
-                    }
-                  })()
-                }}
+                onClick={handleSaveDraft}
               >
-                Save draft
+                Save as draft
               </Button>
             </div>
           </div>
@@ -1422,8 +1488,11 @@ export function AdminPage() {
 
         <div className="rounded-card border border-walnut/10 bg-white/35 p-6">
           <Heading level={2} className="text-2xl">
-            Published entries
+            All products
           </Heading>
+          <p className="mt-2 text-sm leading-6 text-walnut/65">
+            Published and draft products are listed here and currently appear in the shop.
+          </p>
           <div className="mt-5 space-y-4">
             {products.length === 0 ? (
               <p className="text-sm text-walnut/60">No admin products yet.</p>

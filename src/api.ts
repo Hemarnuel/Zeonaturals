@@ -1,4 +1,4 @@
-import { API_BASE_URL, IS_DEMO_API } from "./config"
+import { API_BASE_URL, IS_DEMO_API, PAYSTACK_ENABLED } from "./config"
 import { isSupabaseConfigured } from "./supabase"
 
 type ProductFaq = {
@@ -427,7 +427,7 @@ function getDemoProductsForRequest(path: string): Product[] | Product | null {
     const category = url.searchParams.get("category")
     const q = url.searchParams.get("q")?.trim().toLowerCase() ?? ""
 
-    let filtered = mergedProducts.filter((product) => product.published !== false)
+    let filtered = mergedProducts
     if (goal) filtered = filtered.filter((product) => product.goal === goal)
     if (category) filtered = filtered.filter((product) => product.category === category)
     if (q) filtered = filtered.filter((product) => product.name.toLowerCase().includes(q))
@@ -437,7 +437,7 @@ function getDemoProductsForRequest(path: string): Product[] | Product | null {
 
   if (url.pathname.startsWith("/api/products/")) {
     const slug = decodeURIComponent(url.pathname.replace("/api/products/", ""))
-    return mergedProducts.find((product) => product.slug === slug && product.published !== false) ?? null
+    return mergedProducts.find((product) => product.slug === slug) ?? null
   }
 
   return null
@@ -478,13 +478,15 @@ async function mockApiRequest<T>(path: string, init?: RequestInit): Promise<T | 
   const url = new URL(path, "http://localhost")
 
   if (isProductRequest(url.pathname) && isSupabaseConfigured) {
-    const { listPublishedProducts } = await import("./supabase")
-    const remoteProducts = await listPublishedProducts().catch(() => [])
+    const { listStorefrontProducts } = await import("./supabase")
+    const remoteProducts = await listStorefrontProducts()
     const remoteSlugs = new Set(remoteProducts.map((product) => product.slug))
-    const products = [
-      ...remoteProducts,
-      ...demoProducts.filter((product) => !remoteSlugs.has(product.slug)),
-    ]
+    const products = PAYSTACK_ENABLED
+      ? remoteProducts.filter((product) => product.published)
+      : [
+          ...remoteProducts,
+          ...demoProducts.filter((product) => !remoteSlugs.has(product.slug)),
+        ]
 
     if (url.pathname === "/api/products") {
       const goal = url.searchParams.get("goal")
@@ -502,10 +504,12 @@ async function mockApiRequest<T>(path: string, init?: RequestInit): Promise<T | 
   }
 
   if (url.pathname === "/api/products") {
+    if (PAYSTACK_ENABLED) return [] as T
     return getDemoProductsForRequest(path) as T
   }
 
   if (url.pathname.startsWith("/api/products/")) {
+    if (PAYSTACK_ENABLED) return null
     const product = getDemoProductsForRequest(path)
     if (!product) return null
     return { product } as T
@@ -514,9 +518,9 @@ async function mockApiRequest<T>(path: string, init?: RequestInit): Promise<T | 
   if (url.pathname === "/api/checkout") {
     const body = init?.body ? JSON.parse(String(init.body)) : {}
     if (isSupabaseConfigured) {
-      const { listPublishedProducts } = await import("./supabase")
-      const publishedProducts = await listPublishedProducts()
-      return demoCheckoutResponse(body, [...publishedProducts, ...demoProducts]) as T
+      const { listStorefrontProducts } = await import("./supabase")
+      const storefrontProducts = await listStorefrontProducts()
+      return demoCheckoutResponse(body, [...storefrontProducts, ...demoProducts]) as T
     }
     return demoCheckoutResponse(body) as T
   }
@@ -538,8 +542,12 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const pathname = new URL(path, "http://localhost").pathname
   const useSupabaseCatalog = isSupabaseConfigured && isProductRequest(pathname)
+  const usePaystackApi =
+    PAYSTACK_ENABLED &&
+    (pathname === "/api/checkout" ||
+      pathname.startsWith("/api/orders/verify/"))
 
-  if (IS_DEMO_API || useSupabaseCatalog) {
+  if ((IS_DEMO_API && !usePaystackApi) || useSupabaseCatalog) {
     const mocked = await mockApiRequest<T>(path, init)
     if (mocked !== null) return mocked
     if (useSupabaseCatalog) throw new ApiError(`Product not found: ${path}`, 404)

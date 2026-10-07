@@ -1,12 +1,13 @@
 # Supabase setup
 
-1. Create a Supabase project and run `supabase/schema.sql` in the SQL Editor.
+1. Create a Supabase project and run `supabase/schema.sql` in the SQL Editor. It creates the product catalog, restricted order tables, and the atomic checkout function. Rerun it when updating an existing project.
 2. Create an admin account in Supabase Authentication. Disable public sign-ups in the Auth settings.
 3. Add that account to `public.admin_users` using the SQL at the end of `schema.sql`, replacing the example email.
-4. For local development, copy `.env.example` to `.env.local` and set the Supabase URL and publishable key (or legacy anon key). For Vercel, add the same variables under **Project Settings → Environment Variables** for Preview and Production, then redeploy. Never put a `service_role` key in a `VITE_` variable or browser code.
-5. Set `VITE_API_BASE_URL` only if you have deployed a separate HTTP API. Leave it empty to use the Supabase catalog and local demo checkout.
-6. Restart Vite locally or redeploy Vercel. Visit `/admin` and sign in with the account created in step 2.
+4. For local development, copy `.env.example` to `.env.local` and set the Supabase URL and publishable key (or legacy anon key). For Vercel, set `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_PAYSTACK_ENABLED=true` in the project environment.
+5. Configure these server-only Vercel environment variables for the API functions: `PAYSTACK_SECRET_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `SITE_URL` (for example, `https://zoenaturals.com`). Never expose `PAYSTACK_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` through a `VITE_` variable or browser code. Use test credentials in Preview and live credentials only in Production.
+6. Leave `VITE_API_BASE_URL` empty to use the same-origin Vercel functions. Set the Paystack dashboard webhook URL to `https://zoenaturals.com/api/paystack/webhook`; the checkout function sends customers back to `/thank-you.html` after payment. Do not use a WooCommerce callback or webhook URL for this app.
+7. For local development, run the Vercel functions with Vercel CLI and provide the server-only variables locally. Set `VITE_PAYSTACK_ENABLED=false` to keep the demo checkout. Redeploy Vercel after changing environment variables. Visit `/admin` and sign in with the account created in step 2.
 
-The products table is readable publicly only for published records. Product changes and unpublished records require an authenticated user listed in `admin_users`; PostgreSQL row-level security enforces this independently of the frontend.
+All products are readable publicly for now, including records marked as drafts; storefront visibility filtering is not enabled. Product changes still require an authenticated user listed in `admin_users`, and PostgreSQL row-level security enforces write access independently of the frontend. If you already ran an earlier version of `schema.sql`, rerun it to apply the updated read policy.
 
-The storefront checkout and payment verification still use the existing demo API when `VITE_API_BASE_URL` is empty. This setup makes product data and admin access persistent; it does not process real payments or persist orders. The demo payment flow is labeled as a simulation in the storefront.
+Paystack checkout calculates prices from published Supabase products on the server, reserves available stock for pending online payments for 30 minutes, and stores orders in the protected `orders` and `order_items` tables. Verified payments atomically reduce product stock. The callback page verifies the transaction server-side; the webhook endpoint validates Paystack signatures and independently confirms successful charges. Keep `VITE_PAYSTACK_ENABLED=false` until the server environment and webhook are configured.
