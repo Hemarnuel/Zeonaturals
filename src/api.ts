@@ -11,6 +11,10 @@ export type Product = {
   slug: string
   name: string
   price: number
+  salesCount?: number
+  salePrice?: number
+  variants?: ProductVariant[]
+  images?: string[]
   category: string
   goal: string
   image?: string
@@ -23,11 +27,24 @@ export type Product = {
   published?: boolean
 }
 
+export type ProductVariant = {
+  id: string
+  name: string
+  price: number
+  salesCount?: number
+  stock: number
+  salePrice?: number
+}
+
 export type ProductInput = {
   id?: string
   slug?: string
   name: string
   price: number
+  salesCount?: number
+  salePrice?: number
+  variants?: ProductVariant[]
+  images?: string[]
   category: string
   goal: string
   image?: string
@@ -76,6 +93,10 @@ function productFromInput(input: ProductInput): Product {
     slug: resolvedSlug,
     name: input.name,
     price: Number(input.price) || 0,
+    salesCount: input.salesCount ?? 0,
+    salePrice: input.salePrice ? Number(input.salePrice) : undefined,
+    variants: input.variants ?? [],
+    images: input.images ?? (input.image ? [input.image] : []),
     category: input.category || "Supplements",
     goal: input.goal || "Everyday wellness",
     image: input.image || undefined,
@@ -426,13 +447,20 @@ function getDemoProductsForRequest(path: string): Product[] | Product | null {
     const goal = url.searchParams.get("goal")
     const category = url.searchParams.get("category")
     const q = url.searchParams.get("q")?.trim().toLowerCase() ?? ""
+    const sort = url.searchParams.get("sort") ?? "newest"
+    const page = Math.max(1, Number(url.searchParams.get("page")) || 1)
+    const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit")) || 12))
 
     let filtered = mergedProducts
     if (goal) filtered = filtered.filter((product) => product.goal === goal)
     if (category) filtered = filtered.filter((product) => product.category === category)
     if (q) filtered = filtered.filter((product) => product.name.toLowerCase().includes(q))
 
-    return filtered
+    if (sort === "price_asc") filtered = [...filtered].sort((a, b) => a.price - b.price)
+    else if (sort === "price_desc") filtered = [...filtered].sort((a, b) => b.price - a.price)
+    else if (sort === "bestselling") filtered = [...filtered].sort((a, b) => (b.salesCount ?? 0) - (a.salesCount ?? 0))
+
+    return filtered.slice((page - 1) * limit, page * limit)
   }
 
   if (url.pathname.startsWith("/api/products/")) {
@@ -477,6 +505,21 @@ function demoCheckoutResponse(
 async function mockApiRequest<T>(path: string, init?: RequestInit): Promise<T | null> {
   const url = new URL(path, "http://localhost")
 
+  if (url.pathname === "/api/categories") {
+    let catalog = demoProducts
+    if (isSupabaseConfigured) {
+      const { listStorefrontProducts } = await import("./supabase")
+      const remoteProducts = await listStorefrontProducts()
+      catalog = PAYSTACK_ENABLED
+        ? remoteProducts.filter((product) => product.published)
+        : [...remoteProducts, ...demoProducts]
+    }
+    return {
+      goals: [...new Set(catalog.map((product) => product.goal))],
+      categories: [...new Set(catalog.map((product) => product.category))],
+    } as T
+  }
+
   if (isProductRequest(url.pathname) && isSupabaseConfigured) {
     const { listStorefrontProducts } = await import("./supabase")
     const remoteProducts = await listStorefrontProducts()
@@ -492,11 +535,17 @@ async function mockApiRequest<T>(path: string, init?: RequestInit): Promise<T | 
       const goal = url.searchParams.get("goal")
       const category = url.searchParams.get("category")
       const query = url.searchParams.get("q")?.trim().toLowerCase() ?? ""
+      const sort = url.searchParams.get("sort") ?? "newest"
+      const page = Math.max(1, Number(url.searchParams.get("page")) || 1)
+      const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit")) || 12))
       let filtered = products
       if (goal) filtered = filtered.filter((product) => product.goal === goal)
       if (category) filtered = filtered.filter((product) => product.category === category)
       if (query) filtered = filtered.filter((product) => product.name.toLowerCase().includes(query))
-      return filtered as T
+      if (sort === "price_asc") filtered = [...filtered].sort((a, b) => a.price - b.price)
+      else if (sort === "price_desc") filtered = [...filtered].sort((a, b) => b.price - a.price)
+      else if (sort === "bestselling") filtered = [...filtered].sort((a, b) => (b.salesCount ?? 0) - (a.salesCount ?? 0))
+      return filtered.slice((page - 1) * limit, page * limit) as T
     }
 
     const slug = decodeURIComponent(url.pathname.replace("/api/products/", ""))
@@ -545,7 +594,8 @@ export async function apiRequest<T>(
   const usePaystackApi =
     PAYSTACK_ENABLED &&
     (pathname === "/api/checkout" ||
-      pathname.startsWith("/api/orders/verify/"))
+      pathname.startsWith("/api/orders/verify/") ||
+      pathname === "/api/orders/track")
 
   if ((IS_DEMO_API && !usePaystackApi) || useSupabaseCatalog) {
     const mocked = await mockApiRequest<T>(path, init)
@@ -571,6 +621,9 @@ export async function apiRequest<T>(
       } catch {
         // Keep the safe fallback for non-JSON API errors.
       }
+      if (response.status === 429) {
+        message = "Too many requests, please try again shortly."
+      }
       throw new ApiError(message, response.status)
     }
 
@@ -592,10 +645,30 @@ export function normalizeProduct(raw: any, index = 0): Product {
     slug: String(raw.slug ?? raw.id ?? index),
     name: String(raw.name ?? raw.title ?? "Botanical wellness blend"),
     price: Number(String(raw.price ?? 0).replace(/,/g, "")),
+    salesCount: Math.max(0, Number(raw.sales_count ?? raw.salesCount ?? 0)),
+    salePrice: raw.sale_price == null && raw.salePrice == null
+      ? undefined
+      : Number(raw.sale_price ?? raw.salePrice),
+    variants: Array.isArray(raw.variants)
+      ? raw.variants.map((variant: any, variantIndex: number) => ({
+          id: String(variant.id ?? variant.variantId ?? variantIndex),
+          name: String(variant.name ?? variant.label ?? "Standard"),
+          price: Number(variant.price ?? raw.price ?? 0),
+          stock: Math.max(0, Number(variant.stock ?? raw.stock ?? 0)),
+          salePrice: variant.salePrice == null && variant.sale_price == null
+            ? undefined
+            : Number(variant.salePrice ?? variant.sale_price),
+        }))
+      : [],
+    images: Array.isArray(raw.images)
+      ? raw.images.filter((image: unknown): image is string => typeof image === "string")
+      : raw.image_url || raw.imageUrl || raw.image
+        ? [String(raw.image_url ?? raw.imageUrl ?? raw.image)]
+        : [],
     category: String(raw.category?.name ?? raw.category ?? "Supplements"),
     goal: String(raw.goal?.name ?? raw.goal ?? "Everyday wellness"),
-    image: raw.image_url ?? raw.imageUrl ?? raw.image ?? undefined,
-    stock: Math.max(0, Number(raw.stock ?? raw.quantity ?? 0)),
+    image: raw.image_url ?? raw.imageUrl ?? raw.image ?? raw.images?.[0] ?? undefined,
+    stock: Math.max(0, Number(raw.available ?? raw.stock ?? raw.quantity ?? 0)),
     description: String(
       raw.description ??
         "A thoughtful botanical formula for your daily ritual.",

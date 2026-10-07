@@ -15,6 +15,8 @@ import {
   QuizPage,
   ShopPage,
   ThankYouPage,
+  TrackingPage,
+  PolicyPage,
 } from "../pages/commerce"
 
 export const router = createBrowserRouter([
@@ -36,6 +38,10 @@ export const router = createBrowserRouter([
       { path: "cart", Component: CartPage },
       { path: "checkout", Component: CheckoutPage },
       { path: "thank-you.html", Component: ThankYouPage },
+      { path: "track", Component: TrackingPage },
+      { path: "privacy", Component: PolicyPage },
+      { path: "terms", Component: PolicyPage },
+      { path: "returns", Component: PolicyPage },
       { path: "*", Component: NotFoundPage },
     ],
   },

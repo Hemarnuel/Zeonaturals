@@ -18,7 +18,9 @@ function validCustomer(customer) {
     typeof customer?.phone === "string" &&
     NIGERIAN_PHONE_PATTERN.test(customer.phone.replace(/[\s()-]/g, "")) &&
     typeof customer?.address === "string" &&
-    customer.address.trim().length >= 5
+    customer.address.trim().length >= 5 &&
+    typeof customer?.state === "string" &&
+    customer.state.trim().length > 0
   )
 }
 
@@ -29,18 +31,28 @@ function normalizeItems(items) {
     if (
       typeof item?.productId !== "string" ||
       !UUID_PATTERN.test(item.productId) ||
+      (item.variantId !== undefined &&
+        (typeof item.variantId !== "string" || item.variantId.length > 100)) ||
       !Number.isSafeInteger(item.qty) ||
       item.qty < 1 ||
       item.qty > 20
     ) {
       return null
     }
-    quantities.set(item.productId, (quantities.get(item.productId) ?? 0) + item.qty)
+    const key = `${item.productId}\u0000${item.variantId ?? ""}`
+    quantities.set(key, {
+      productId: item.productId,
+      ...(item.variantId ? { variantId: item.variantId } : {}),
+      qty: (quantities.get(key)?.qty ?? 0) + item.qty,
+    })
   }
-  if ([...quantities.values()].some((qty) => qty > 20)) return null
-  return [...quantities.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([productId, qty]) => ({ productId, qty }))
+  if ([...quantities.values()].some((item) => item.qty > 20)) return null
+  return [...quantities.values()]
+    .sort((left, right) =>
+      `${left.productId}:${left.variantId ?? ""}`.localeCompare(
+        `${right.productId}:${right.variantId ?? ""}`,
+      ),
+    )
 }
 
 export default async function handler(request, response) {
@@ -51,9 +63,10 @@ export default async function handler(request, response) {
 
   try {
     const config = requirePaymentConfig()
-    const { customer, paymentMethod = "paystack" } = request.body ?? {}
+    const { customer, paymentMethod = "paystack", website, termsAccepted } = request.body ?? {}
     const items = normalizeItems(request.body?.items)
-    if (!validCustomer(customer) || !items || !["paystack", "pod"].includes(paymentMethod)) {
+    if (website) return sendJson(response, 400, { message: "Please check your order details." })
+    if (!termsAccepted || !validCustomer(customer) || !items || !["paystack", "pod"].includes(paymentMethod)) {
       return sendJson(response, 400, { message: "Please check your delivery details and order items." })
     }
 
@@ -67,6 +80,7 @@ export default async function handler(request, response) {
           email: customer.email.trim().toLowerCase(),
           phone: customer.phone.trim(),
           address: customer.address.trim(),
+          state: customer.state.trim(),
         },
         p_items: items,
         p_payment_method: paymentMethod,

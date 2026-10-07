@@ -80,14 +80,6 @@ const reviews = [
   },
 ]
 
-type Product = {
-  id: string
-  name: string
-  price: number
-  category: string
-  image?: string
-}
-
 type ProductCardProps = {
   product: Product
   index: number
@@ -126,11 +118,38 @@ function SearchBox({
   compact?: boolean
 }) {
   const [query, setQuery] = useState("")
+  const [suggestions, setSuggestions] = useState<Product[]>([])
+  const [focused, setFocused] = useState(false)
+
+  useEffect(() => {
+    const trimmed = query.trim()
+    if (trimmed.length < 2) {
+      setSuggestions([])
+      return
+    }
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
+      apiRequest<any>(`/api/products?q=${encodeURIComponent(trimmed)}&limit=5`, {
+        signal: controller.signal,
+      })
+        .then((payload) => setSuggestions(extractProducts(payload).slice(0, 5)))
+        .catch((error) => {
+          if (!(error instanceof DOMException && error.name === "AbortError")) {
+            console.error("Product suggestions could not be loaded:", error)
+            setSuggestions([])
+          }
+        })
+    }, 180)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [query])
 
   function submit(event: FormEvent) {
     event.preventDefault()
     if (query.trim()) {
-      window.location.hash = `search=${encodeURIComponent(query.trim())}`
+      window.location.href = `/shop?q=${encodeURIComponent(query.trim())}`
     }
   }
 
@@ -139,11 +158,13 @@ function SearchBox({
       onSubmit={submit}
       role="search"
       className={`relative ${compact ? "w-full" : "w-full max-w-md"}`}
+      onBlur={() => setTimeout(() => setFocused(false), 120)}
     >
       <TextField
         ref={inputRef}
         value={query}
         onChange={(event) => setQuery(event.target.value)}
+        onFocus={() => setFocused(true)}
         placeholder="What can nature help with?"
         aria-label="Search products"
         className="w-full pr-12"
@@ -156,6 +177,20 @@ function SearchBox({
       >
         <Icon name="search" size="sm" />
       </Button>
+      {focused && suggestions.length > 0 && (
+        <div className="absolute inset-x-0 top-full z-50 mt-2 overflow-hidden rounded-card border border-walnut/10 bg-cream shadow-soft">
+          {suggestions.map((product) => (
+            <a
+              key={product.id}
+              href={`/product/${encodeURIComponent(product.slug)}`}
+              className="block px-4 py-3 text-sm transition hover:bg-sage/20"
+            >
+              <span className="font-semibold">{product.name}</span>
+              <span className="ml-2 text-walnut/55">{formatNaira(product.price)}</span>
+            </a>
+          ))}
+        </div>
+      )}
     </form>
   )
 }
@@ -184,7 +219,7 @@ function MegaMenu({ close }: { close: () => void }) {
             {categories.map((category) => (
               <NavLink
                 key={category}
-                href={`#${category.toLowerCase().replace(/ /g, "-")}`}
+                href={`/shop?category=${encodeURIComponent(category)}`}
                 onClick={close}
               >
                 {category}
@@ -203,7 +238,7 @@ function MegaMenu({ close }: { close: () => void }) {
             Explore every published product, from daily essentials to new blends.
           </p>
           <NavLink
-            href="#bestsellers"
+            href="/shop?sort=bestselling"
             className="mt-5 inline-flex font-bold text-deep-fern"
             onClick={close}
           >
@@ -252,13 +287,9 @@ function Header({
           </NavLink>
         </nav>
         <div className="ml-auto flex items-center gap-1 lg:ml-2">
-          <Button
-            variant="icon"
-            aria-label="Account"
-            className="hidden sm:inline-grid"
-          >
+          <NavLink href="/account" aria-label="Account" className="hidden sm:inline-grid rounded-full p-2">
             <Icon name="user" />
-          </Button>
+          </NavLink>
           <Button
             variant="icon"
             aria-label={`Cart with ${itemCount} items`}
@@ -282,57 +313,18 @@ function Header({
   )
 }
 
-function useHomeProducts() {
-  const [products, setProducts] = useState<Product[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-  const [requestKey, setRequestKey] = useState(0)
-
-  useEffect(() => {
-    const controller = new AbortController()
-
-    async function loadProducts() {
-      setLoading(true)
-      setError("")
-      try {
-        const payload = await apiRequest<any>("/api/products", {
-          signal: controller.signal,
-        })
-        const rawProducts: any[] = Array.isArray(payload)
-          ? payload
-          : Array.isArray(payload.products)
-            ? payload.products
-            : Array.isArray(payload.data?.products)
-              ? payload.data.products
-            : Array.isArray(payload.data)
-              ? payload.data
-              : []
-        setProducts(extractProducts(rawProducts))
-      } catch (reason) {
-        if (reason instanceof DOMException && reason.name === "AbortError")
-          return
-        setError(
-          "We couldn't load the product collection right now. Please try again in a moment.",
-        )
-      } finally {
-        if (!controller.signal.aborted) setLoading(false)
-      }
-    }
-
-    loadProducts()
-    return () => controller.abort()
-  }, [requestKey])
-
-  return {
-    products,
-    loading,
-    error,
-    retry: () => setRequestKey((key) => key + 1),
-  }
-}
-
 function ProductCard({ product, index }: ProductCardProps) {
-  const { addItem } = useCart()
+  const { addItemQuantity } = useCart()
+  const available = product.variants?.length
+    ? product.variants.reduce((sum, variant) => sum + variant.stock, 0)
+    : product.stock
+  const cheapestVariant = product.variants?.length
+    ? product.variants.reduce((lowest, item) =>
+        (item.salePrice ?? item.price) < (lowest.salePrice ?? lowest.price) ? item : lowest,
+      )
+    : undefined
+  const regularPrice = cheapestVariant?.price ?? product.price
+  const salePrice = cheapestVariant?.salePrice ?? product.salePrice
   const fallbackImage = herbalTeaImages[index % herbalTeaImages.length]
   const [imageSource, setImageSource] = useState(product.image || fallbackImage.src)
 
@@ -342,7 +334,7 @@ function ProductCard({ product, index }: ProductCardProps) {
 
   return (
     <article className="w-[78vw] shrink-0 snap-start sm:w-80">
-      <div className="overflow-hidden rounded-card bg-sage/20">
+      <NavLink href={`/product/${encodeURIComponent(product.slug)}`} className="relative block overflow-hidden rounded-card bg-sage/20">
         <img
           src={imageSource}
           alt={product.image && imageSource === product.image ? product.name : fallbackImage.alt}
@@ -352,124 +344,200 @@ function ProductCard({ product, index }: ProductCardProps) {
           loading="lazy"
           className="h-72 w-full object-cover transition duration-500 hover:scale-105"
         />
-      </div>
+        {available <= 5 && (
+          <span className="absolute left-3 top-3 rounded-full bg-deep-fern px-3 py-1 text-xs font-bold text-white">
+            {available > 0 ? "Low stock" : "Out of stock"}
+          </span>
+        )}
+        {salePrice != null && salePrice < regularPrice && (
+          <span className="absolute right-3 top-3 rounded-full bg-terracotta px-3 py-1 text-xs font-bold text-white">
+            Sale
+          </span>
+        )}
+      </NavLink>
       <p className="mt-5 text-xs font-bold uppercase tracking-widest text-deep-fern/80">
         {product.category}
       </p>
       <div className="mt-2 flex items-start justify-between gap-4">
         <div>
-          <Heading level={3} className="text-2xl">
-            {product.name}
-          </Heading>
+          <NavLink href={`/product/${encodeURIComponent(product.slug)}`}>
+            <Heading level={3} className="text-2xl">{product.name}</Heading>
+          </NavLink>
           <p className="mt-1 font-semibold text-walnut/70">
-            {formatNaira(product.price)}
+            {salePrice != null && salePrice < regularPrice && (
+              <span className="mr-2 text-sm text-walnut/45 line-through">
+                {formatNaira(regularPrice)}
+              </span>
+            )}
+            {product.variants?.length
+              ? `From ${formatNaira(salePrice ?? regularPrice)}`
+              : formatNaira(salePrice ?? regularPrice)}
           </p>
         </div>
         <Button
           variant="small"
-          onClick={() => addItem(product)}
+          disabled={available < 1}
+          onClick={() => addItemQuantity(product, 1)}
           aria-label={`Add ${product.name} to cart`}
         >
-          Add
+          {available < 1 ? "Out of stock" : "Add to cart"}
         </Button>
       </div>
+      <Button
+        className="mt-3 w-full"
+        disabled={available < 1}
+        onClick={() => {
+          addItemQuantity(product, 1)
+          window.location.href = "/checkout"
+        }}
+      >
+        {available < 1 ? "Out of stock" : "Order now"}
+      </Button>
     </article>
   )
 }
 
-function HomeProducts() {
-  const { products, loading, error, retry } = useHomeProducts()
-  const carouselRef = useRef<HTMLDivElement>(null)
+function HomeImageSlider() {
+  const slides = [
+    {
+      title: "Find your softer evening",
+      action: "Shop Sleep",
+      goal: "Sleep",
+      image: "https://images.unsplash.com/photo-1515823064-d6e0c04616a7?auto=format&fit=crop&w=1800&q=85",
+    },
+    {
+      title: "Bring a little brightness to your day",
+      action: "Shop Energy",
+      goal: "Energy",
+      image: "https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&w=1800&q=85",
+    },
+    {
+      title: "Everyday care, rooted in nature",
+      action: "Shop Immunity",
+      goal: "Immunity",
+      image: "https://images.unsplash.com/photo-1511690743698-d9d85f2fbf38?auto=format&fit=crop&w=1800&q=85",
+    },
+    {
+      title: "A calmer rhythm starts within",
+      action: "Shop Digestion",
+      goal: "Digestion",
+      image: "https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=1800&q=85",
+    },
+  ]
+  const [active, setActive] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const touchStart = useRef<number | null>(null)
 
-  function scroll(direction: number) {
-    carouselRef.current?.scrollBy({ left: direction * 340, behavior: "smooth" })
-  }
+  useEffect(() => {
+    if (paused) return
+    const timer = window.setInterval(() => {
+      setActive((current) => (current + 1) % slides.length)
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [paused, slides.length])
 
+  const slide = slides[active]
   return (
-    <section id="bestsellers" className="bg-white/45 py-16 lg:py-24">
-      <div className="mx-auto max-w-7xl px-5 lg:px-8">
-        <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-          <div>
-            <p className="eyebrow">Recently added & community-loved</p>
-            <Heading level={2} className="mt-3 text-4xl sm:text-5xl">
-              Explore our collection.
-            </Heading>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="icon"
-              onClick={() => scroll(-1)}
-              aria-label="Previous products"
-            >
-              <Icon name="arrowLeft" />
-            </Button>
-            <Button
-              variant="icon"
-              onClick={() => scroll(1)}
-              aria-label="Next products"
-            >
-              <Icon name="arrowRight" />
-            </Button>
-          </div>
+    <section className="mx-auto max-w-7xl px-5 pb-16 lg:px-8 lg:pb-24">
+      <div
+        className="relative h-[20rem] overflow-hidden rounded-card bg-deep-fern sm:h-[26rem]"
+        onMouseEnter={() => setPaused(true)}
+        onMouseLeave={() => setPaused(false)}
+        onTouchStart={(event) => { setPaused(true); touchStart.current = event.touches[0]?.clientX ?? null }}
+        onTouchEnd={(event) => {
+          if (touchStart.current === null) return
+          const delta = (event.changedTouches[0]?.clientX ?? touchStart.current) - touchStart.current
+          if (Math.abs(delta) > 40) setActive((current) => (current + (delta < 0 ? 1 : slides.length - 1)) % slides.length)
+          touchStart.current = null
+          setPaused(false)
+        }}
+      >
+        <img src={slide.image} alt="" className="absolute inset-0 size-full object-cover transition-opacity duration-500" />
+        <div className="absolute inset-0 bg-gradient-to-r from-walnut/70 via-walnut/25 to-transparent" />
+        <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col items-start justify-center p-7 text-cream sm:p-12">
+          <Heading level={2} className="text-4xl text-cream sm:text-5xl">{slide.title}</Heading>
+          <a href={`/shop?goal=${encodeURIComponent(slide.goal)}`} className="mt-6 inline-flex rounded-card bg-terracotta px-6 py-3 font-bold text-white">
+            {slide.action} <Icon name="arrowRight" size="sm" />
+          </a>
         </div>
-
-        {loading && (
-          <div
-            className="mt-10 flex gap-6 overflow-hidden"
-            aria-label="Loading products"
-          >
-            {[0, 1, 2, 3].map((item) => (
-              <div key={item} className="w-[78vw] shrink-0 sm:w-80">
-                <div className="h-64 animate-pulse rounded-card bg-sage/20" />
-                <div className="mt-5 h-3 w-24 animate-pulse rounded-full bg-sage/30" />
-                <div className="mt-3 h-7 w-48 animate-pulse rounded-full bg-sage/30" />
-                <div className="mt-3 h-4 w-20 animate-pulse rounded-full bg-sage/20" />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {!loading && error && (
-          <div className="mt-10 flex flex-col items-center rounded-card border border-terracotta/30 bg-terracotta/10 px-6 py-12 text-center">
-            <span className="grid size-12 place-items-center rounded-full bg-terracotta/15 text-terracotta">
-              <Icon name="alert" />
-            </span>
-            <Heading level={3} className="mt-4 text-2xl">
-              Our shelf is taking a pause
-            </Heading>
-            <p className="mt-2 max-w-md text-sm leading-6 text-walnut/70">
-              {error}
-            </p>
-            <Button variant="secondary" className="mt-5" onClick={retry}>
-              Try again
-            </Button>
-          </div>
-        )}
-
-        {!loading && !error && products.length === 0 && (
-          <p className="mt-10 rounded-card bg-sage/15 p-8 text-center text-walnut/70">
-            No products have been published yet. Please check back soon.
-          </p>
-        )}
-
-        {!loading && !error && products.length > 0 && (
-          <div
-            ref={carouselRef}
-            className="mt-10 flex snap-x snap-mandatory gap-6 overflow-x-auto pb-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          >
-            {products.map((product, index) => (
-              <ProductCard key={product.id} product={product} index={index} />
-            ))}
-          </div>
-        )}
+        <Button variant="icon" className="absolute left-3 top-1/2 -translate-y-1/2 bg-cream/80" onClick={() => setActive((active + slides.length - 1) % slides.length)} aria-label="Previous slide"><Icon name="arrowLeft" /></Button>
+        <Button variant="icon" className="absolute right-3 top-1/2 -translate-y-1/2 bg-cream/80" onClick={() => setActive((active + 1) % slides.length)} aria-label="Next slide"><Icon name="arrowRight" /></Button>
+        <div className="absolute inset-x-0 bottom-4 flex justify-center gap-2">
+          {slides.map((item, index) => (
+            <button key={item.goal} aria-label={`Show slide ${index + 1}`} aria-current={active === index} onClick={() => setActive(index)} className={`size-2.5 rounded-full ${active === index ? "bg-white" : "bg-white/50"}`} />
+          ))}
+        </div>
       </div>
     </section>
+  )
+}
+
+function GoalProductShelf({ goal }: { goal: string }) {
+  const [products, setProducts] = useState<Product[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
+  useEffect(() => {
+    let active = true
+    setLoading(true)
+    setError("")
+    apiRequest<any>(`/api/products?goal=${encodeURIComponent(goal)}&limit=4`)
+      .then((payload) => { if (active) setProducts(extractProducts(payload).slice(0, 4)) })
+      .catch((reason) => {
+        if (!active) return
+        setError(reason instanceof Error ? reason.message : `Could not load ${goal} products.`)
+        console.error(`Could not load ${goal} products:`, reason)
+      })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [goal])
+  if (!loading && !error && products.length === 0) return null
+  return (
+    <section className="py-12">
+      <div className="mb-6 flex items-end justify-between gap-4">
+        <Heading level={2} className="text-3xl sm:text-4xl">{goal}</Heading>
+        <a href={`/shop?goal=${encodeURIComponent(goal)}`} className="shrink-0 font-semibold text-deep-fern">View all →</a>
+      </div>
+      {error ? (
+        <p role="alert" className="rounded-card bg-terracotta/10 p-5 text-sm text-walnut">{error}</p>
+      ) : loading ? (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{[0, 1, 2, 3].map((item) => <div key={item} className="animate-pulse"><div className="h-64 rounded-card bg-sage/20" /><div className="mt-4 h-5 w-2/3 rounded bg-sage/25" /></div>)}</div>
+      ) : (
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">{products.map((product, index) => <ProductCard key={product.id} product={product} index={index} />)}</div>
+      )}
+    </section>
+  )
+}
+
+function GoalCollections({ availableGoals }: { availableGoals: string[] }) {
+  const goalsForHome = ["Sleep", "Energy", "Immunity", "Digestion"].filter((goal) => availableGoals.includes(goal))
+  return (
+    <div id="bestsellers" className="bg-white/45 py-12 lg:py-16">
+      <div className="mx-auto max-w-7xl px-5 lg:px-8">
+        {goalsForHome.map((goal) => <GoalProductShelf key={goal} goal={goal} />)}
+        <div className="mt-5 text-center">
+          <Button onClick={() => { window.location.href = "/shop" }}>Shop more</Button>
+        </div>
+      </div>
+    </div>
   )
 }
 
 export function HomePage() {
   const [email, setEmail] = useState("")
   const [subscribed, setSubscribed] = useState(false)
+  const [availableGoals, setAvailableGoals] = useState<string[]>(goals)
+
+  useEffect(() => {
+    let active = true
+    apiRequest<any>("/api/categories")
+      .then((payload) => {
+        if (active && Array.isArray(payload.goals) && payload.goals.length) {
+          setAvailableGoals(payload.goals)
+        }
+      })
+      .catch((error) => console.error("Could not load product categories:", error))
+    return () => { active = false }
+  }, [])
 
   function joinNewsletter(event: FormEvent) {
     event.preventDefault()
@@ -550,40 +618,23 @@ export function HomePage() {
               Shop by goal
             </Heading>
           </div>
-          <div className="mt-10 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            {goalCards.map((goal) => (
+          <div className="mt-8 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {goalCards.filter((goal) => availableGoals.includes(goal.name)).map((goal) => (
               <NavLink
                 key={goal.name}
                 href={`/shop?goal=${encodeURIComponent(goal.name)}`}
-                className={`group relative flex min-h-[220px] flex-col justify-between overflow-hidden rounded-[1.25rem] p-4 shadow-soft transition duration-300 hover:-translate-y-1 hover:shadow-lg ${goal.tone}`}
+                className={`group flex min-w-28 snap-start flex-col items-center rounded-card p-4 text-center transition hover:-translate-y-1 sm:min-w-36 ${goal.tone}`}
               >
-                <div className={`absolute -right-6 -top-6 size-24 rounded-full opacity-80 blur-2xl transition duration-500 group-hover:scale-110 ${goal.glow}`} />
-                <div className="relative z-10 flex items-center justify-between">
-                  <span className={`grid size-11 place-items-center rounded-2xl shadow-sm ${goal.badge}`}>
-                    <Icon name={goal.icon} />
-                  </span>
-                  <span className="rounded-full bg-white/65 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.18em] text-walnut/70">
-                    Goal
-                  </span>
-                </div>
-                <div className="relative z-10 mt-8">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-walnut/60">
-                    {goal.description}
-                  </p>
-                  <p className="mt-2 font-heading text-[2rem] leading-none tracking-tight">
-                    {goal.name}
-                  </p>
-                  <span className="mt-5 inline-flex items-center gap-2 text-sm font-semibold">
-                    Explore <Icon name="arrowRight" size="xs" />
-                  </span>
-                </div>
+                <span className={`grid size-12 place-items-center rounded-2xl shadow-sm ${goal.badge}`}><Icon name={goal.icon} /></span>
+                <span className="mt-3 text-sm font-semibold">{goal.name}</span>
               </NavLink>
             ))}
           </div>
         </div>
       </section>
 
-      <HomeProducts />
+      <HomeImageSlider />
+      <GoalCollections availableGoals={availableGoals} />
 
       <section className="border-y border-walnut/10 bg-cream">
         <div className="mx-auto grid max-w-7xl grid-cols-2 px-5 py-8 lg:grid-cols-4 lg:px-8">
@@ -768,6 +819,24 @@ export function HomePage() {
 }
 
 function Footer() {
+  const groups: { title: string; links: [string, string][] }[] = [
+    {
+      title: "Shop",
+      links: [["/shop", "All products"], ["/shop?goal=Sleep", "Bestsellers"], ["/shop?goal=Energy", "Shop by goal"]],
+    },
+    {
+      title: "About",
+      links: [["/about", "Our story"], ["/ingredients", "Our ingredients"], ["/journal", "Journal"]],
+    },
+    {
+      title: "Support",
+      links: [["/faq", "FAQs"], ["/contact", "Contact us"], ["/account", "Your account"], ["/track", "Track order"]],
+    },
+    {
+      title: "Policies",
+      links: [["/privacy", "Privacy"], ["/terms", "Terms"], ["/returns", "Returns"]],
+    },
+  ]
   return (
     <footer className="bg-deep-fern pb-28 pt-16 text-cream lg:pb-10 lg:pt-20">
       <div className="mx-auto grid max-w-7xl gap-12 px-5 lg:grid-cols-[1.4fr_2fr] lg:px-8">
@@ -786,27 +855,8 @@ function Footer() {
           </p>
           <div className="mt-7 h-px w-12 bg-gold" />
         </div>
-        <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
-          {[
-            [
-              "Shop",
-              ["/shop", "All products"],
-              ["/shop?goal=Sleep", "Bestsellers"],
-              ["/shop?goal=Energy", "Shop by goal"],
-            ],
-            [
-              "About",
-              ["/about", "Our story"],
-              ["/ingredients", "Our ingredients"],
-              ["/journal", "Journal"],
-            ],
-            [
-              "Support",
-              ["/faq", "FAQs"],
-              ["/contact", "Contact us"],
-              ["/account", "Your account"],
-            ],
-          ].map(([title, ...links]) => (
+        <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
+          {groups.map(({ title, links }) => (
             <div key={title}>
               <p className="text-xs font-bold uppercase tracking-widest text-gold">
                 {title}
@@ -872,13 +922,59 @@ function MobileNav({ focusSearch }: { focusSearch: () => void }) {
   )
 }
 
+function ToastNotice() {
+  const [message, setMessage] = useState("")
+  useEffect(() => {
+    let timeout: number | undefined
+    const show = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail
+      if (typeof detail !== "string") return
+      setMessage(detail)
+      window.clearTimeout(timeout)
+      timeout = window.setTimeout(() => setMessage(""), 3000)
+    }
+    window.addEventListener("zoenaturals-toast", show)
+    return () => {
+      window.removeEventListener("zoenaturals-toast", show)
+      window.clearTimeout(timeout)
+    }
+  }, [])
+  return message ? <div role="status" className="fixed bottom-40 left-1/2 z-[70] -translate-x-1/2 rounded-card bg-deep-fern px-5 py-3 text-sm font-semibold text-white shadow-soft lg:bottom-20">{message}</div> : null
+}
+
 export function RootLayout() {
   const searchRef = useRef<HTMLInputElement>(null)
+  const [cookieVisible, setCookieVisible] = useState(false)
+  useEffect(() => {
+    try {
+      setCookieVisible(window.localStorage.getItem("zoenaturals-cookie-notice") !== "accepted")
+    } catch (error) {
+      console.error("Unable to read cookie preference:", error)
+      setCookieVisible(true)
+    }
+  }, [])
   return (
     <div className="min-h-screen bg-cream text-walnut">
+      <SeoMetadata title="Zoenaturals | Plant-powered wellness" description="Thoughtful plant-based formulas for better rest, brighter energy, and everyday balance." />
       <Header searchRef={searchRef} />
       <Outlet />
       <Footer />
+      <ToastNotice />
+      {cookieVisible && (
+        <aside className="fixed inset-x-4 bottom-20 z-50 mx-auto flex max-w-3xl flex-col gap-4 rounded-card border border-walnut/15 bg-cream p-4 shadow-soft sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-walnut/75">We use essential cookies to keep your shopping experience working.</p>
+          <Button onClick={() => {
+            try {
+              window.localStorage.setItem("zoenaturals-cookie-notice", "accepted")
+              setCookieVisible(false)
+            } catch (error) {
+              console.error("Unable to save cookie preference:", error)
+              setCookieVisible(false)
+            }
+          }}>Accept</Button>
+        </aside>
+      )}
+      <a href="https://wa.me/2348000000000" target="_blank" rel="noreferrer" aria-label="Chat with us on WhatsApp" className="fixed bottom-24 right-4 z-40 rounded-full bg-deep-fern px-4 py-3 text-sm font-bold text-white shadow-soft lg:bottom-6">WhatsApp</a>
       <MobileNav
         focusSearch={() => {
           searchRef.current?.focus()
@@ -890,4 +986,18 @@ export function RootLayout() {
       />
     </div>
   )
+}
+
+function SeoMetadata({ title, description }: { title: string; description: string }) {
+  useEffect(() => {
+    document.title = title
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]')
+    if (!meta) {
+      meta = document.createElement("meta")
+      meta.name = "description"
+      document.head.append(meta)
+    }
+    meta.content = description
+  }, [title, description])
+  return null
 }

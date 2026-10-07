@@ -9,6 +9,7 @@ import {
   normalizeProduct,
   Product,
   ProductInput,
+  ProductVariant,
   removeProductRecord,
   saveProductRecord,
   saveProductRecords,
@@ -42,6 +43,13 @@ import {
 
 const goals = ["Sleep", "Energy", "Immunity", "Digestion", "Skin & Hair"]
 const categories = ["Herbal Teas", "Supplements", "Superfoods", "Body Care"]
+const nigerianStates = [
+  "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue",
+  "Borno", "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "FCT",
+  "Gombe", "Imo", "Jigawa", "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi",
+  "Kwara", "Lagos", "Nasarawa", "Niger", "Ogun", "Ondo", "Osun", "Oyo",
+  "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara",
+]
 
 function formatNaira(value: number) {
   return new Intl.NumberFormat("en-NG", {
@@ -49,6 +57,19 @@ function formatNaira(value: number) {
     currency: "NGN",
     maximumFractionDigits: 0,
   }).format(value)
+}
+
+function usePageMetadata(title: string, description: string) {
+  useEffect(() => {
+    document.title = title
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="description"]')
+    if (!meta) {
+      meta = document.createElement("meta")
+      meta.name = "description"
+      document.head.append(meta)
+    }
+    meta.content = description
+  }, [title, description])
 }
 
 function ProductImage({
@@ -80,21 +101,31 @@ function ProductActions({
   product,
   quantity = 1,
   stacked = false,
+  variant,
 }: {
   product: Product
   quantity?: number
   stacked?: boolean
+  variant?: ProductVariant
 }) {
   const { addItemQuantity } = useCart()
   const navigate = useNavigate()
-  const unavailable = product.stock === 0
+  const resolvedVariant = variant ?? (product.variants?.length
+    ? product.variants.reduce((lowest, item) =>
+        (item.salePrice ?? item.price) < (lowest.salePrice ?? lowest.price) ? item : lowest,
+      )
+    : undefined)
+  const available = resolvedVariant?.stock ?? product.stock
+  const unitPrice = resolvedVariant?.salePrice ?? product.salePrice ?? resolvedVariant?.price ?? product.price
+  const unavailable = available === 0
   const cartProduct = {
     id: product.id,
+    variantId: resolvedVariant?.id,
     slug: product.slug,
-    name: product.name,
-    price: product.price,
-    image: product.image,
-    stock: product.stock,
+    name: resolvedVariant ? `${product.name} — ${resolvedVariant.name}` : product.name,
+    price: unitPrice,
+    image: resolvedVariant ? (product.images?.[0] ?? product.image) : product.image,
+    stock: available,
   }
 
   function orderNow() {
@@ -144,11 +175,14 @@ function PageIntro({
 }
 
 export function ShopPage() {
+  usePageMetadata("Shop wellness products | Zoenaturals", "Explore plant-powered supplements and wellness products by goal or category.")
   const [searchParams, setSearchParams] = useSearchParams()
   const [query, setQuery] = useState(searchParams.get("q") ?? "")
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const page = Math.max(1, Number(searchParams.get("page")) || 1)
+  const sort = searchParams.get("sort") ?? "newest"
   const filterKey = searchParams.toString()
 
   useEffect(() => {
@@ -156,7 +190,10 @@ export function ShopPage() {
     setLoading(true)
     setError("")
 
-    apiRequest<any>(`/api/products${filterKey ? `?${filterKey}` : ""}`, {
+    const queryParams = new URLSearchParams(filterKey)
+    queryParams.set("page", String(page))
+    queryParams.set("limit", "13")
+    apiRequest<any>(`/api/products?${queryParams}`, {
       signal: controller.signal,
     })
       .then((payload) => setProducts(extractProducts(payload)))
@@ -179,6 +216,7 @@ export function ShopPage() {
   function setFilter(key: "goal" | "category", value: string) {
     const next = new URLSearchParams(searchParams)
     next.get(key) === value ? next.delete(key) : next.set(key, value)
+    next.delete("page")
     setSearchParams(next)
   }
 
@@ -186,6 +224,17 @@ export function ShopPage() {
     event.preventDefault()
     const next = new URLSearchParams(searchParams)
     query.trim() ? next.set("q", query.trim()) : next.delete("q")
+    next.delete("page")
+    setSearchParams(next)
+  }
+
+  const visibleProducts = products.slice(0, 12)
+  const hasNextPage = products.length > 12
+
+  function changePage(nextPage: number) {
+    const next = new URLSearchParams(searchParams)
+    if (nextPage > 1) next.set("page", String(nextPage))
+    else next.delete("page")
     setSearchParams(next)
   }
 
@@ -209,6 +258,25 @@ export function ShopPage() {
             <Icon name="search" size="sm" /> Search
           </Button>
         </form>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+          <label className="flex items-center gap-2 text-sm font-semibold">
+            Sort by
+            <select value={sort} onChange={(event) => {
+              const next = new URLSearchParams(searchParams)
+              next.set("sort", event.target.value)
+              next.delete("page")
+              setSearchParams(next)
+            }} className="h-11 rounded-card border border-walnut/15 bg-white/55 px-3">
+              <option value="newest">Newest</option>
+              <option value="price_asc">Price: low to high</option>
+              <option value="price_desc">Price: high to low</option>
+              <option value="bestselling">Bestselling</option>
+            </select>
+          </label>
+          {searchParams.size > 0 && (
+            <Button variant="nav" onClick={() => { setQuery(""); setSearchParams({}) }}>Clear filters</Button>
+          )}
+        </div>
 
         <div className="mt-8 space-y-5 border-y border-walnut/10 py-6">
           <div className="flex flex-wrap items-center gap-2">
@@ -275,7 +343,7 @@ export function ShopPage() {
         {!loading && !error && products.length === 0 && (
           <div className="mt-10 rounded-card bg-sage/15 p-10 text-center">
             <Heading level={2} className="text-2xl">
-              No products found
+              No products match
             </Heading>
             <p className="mt-2 text-walnut/65">
               Try a different search or remove a filter.
@@ -285,7 +353,22 @@ export function ShopPage() {
 
         {!loading && !error && products.length > 0 && (
           <div className="mt-10 grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
-            {products.map((product) => (
+            {visibleProducts.map((product) => {
+              const cheapestVariant = product.variants?.length
+                ? product.variants.reduce((lowest, item) =>
+                    (item.salePrice ?? item.price) < (lowest.salePrice ?? lowest.price) ? item : lowest,
+                  )
+                : undefined
+              const currentPrice = cheapestVariant?.salePrice ?? product.salePrice ?? cheapestVariant?.price ?? product.price
+              const originalPrice = cheapestVariant?.salePrice != null
+                ? cheapestVariant.price
+                : product.salePrice != null
+                  ? product.price
+                  : undefined
+              const available = product.variants?.length
+                ? product.variants.reduce((sum, variant) => sum + variant.stock, 0)
+                : product.stock
+              return (
               <article key={product.id}>
                 <NavLink href={`/product/${encodeURIComponent(product.slug)}`}>
                   <ProductImage product={product} />
@@ -293,18 +376,28 @@ export function ShopPage() {
                 <p className="mt-5 text-xs font-bold uppercase tracking-widest text-deep-fern">
                   {product.goal}
                 </p>
+                {originalPrice != null && <span className="mt-2 inline-block rounded-full bg-terracotta px-3 py-1 text-xs font-bold text-white">Sale</span>}
                 <NavLink href={`/product/${encodeURIComponent(product.slug)}`}>
                   <Heading level={2} className="mt-2 text-2xl">
                     {product.name}
                   </Heading>
                 </NavLink>
-                <p className="mb-5 mt-1 font-semibold text-walnut/70">
-                  {formatNaira(product.price)}
+                <p className="mb-1 mt-1 font-semibold text-walnut/70">
+                  {originalPrice != null && <span className="mr-2 text-sm text-walnut/45 line-through">{formatNaira(originalPrice)}</span>}
+                  {product.variants?.length ? `From ${formatNaira(currentPrice)}` : formatNaira(currentPrice)}
                 </p>
+                {available <= 5 && <p className="mb-4 text-xs font-bold text-terracotta">{available > 0 ? "Low stock" : "Out of stock"}</p>}
                 <ProductActions product={product} />
               </article>
-            ))}
+            )})}
           </div>
+        )}
+        {!loading && !error && products.length > 0 && (
+          <nav className="mt-12 flex items-center justify-center gap-4" aria-label="Product pagination">
+            <Button variant="secondary" disabled={page <= 1} onClick={() => changePage(page - 1)}>Previous</Button>
+            <span className="text-sm font-semibold">Page {page}</span>
+            <Button variant="secondary" disabled={!hasNextPage} onClick={() => changePage(page + 1)}>Next</Button>
+          </nav>
         )}
       </div>
     </main>
@@ -319,8 +412,17 @@ export function ProductPage() {
   const [missing, setMissing] = useState(false)
   const [error, setError] = useState("")
   const [quantity, setQuantity] = useState(1)
+  const [selectedVariantId, setSelectedVariantId] = useState("")
+  const [activeImage, setActiveImage] = useState(0)
+  const [zoomed, setZoomed] = useState(false)
+  const imageTouchStart = useRef<number | null>(null)
+  const imageSwiped = useRef(false)
   const [activeTab, setActiveTab] =
     useState<"description" | "ingredients" | "use">("description")
+  usePageMetadata(
+    `${product?.name ?? "Product"} | Zoenaturals`,
+    product?.description ?? "Explore thoughtful plant-powered wellness products from Zoenaturals.",
+  )
 
   useEffect(() => {
     setLoading(true)
@@ -332,6 +434,8 @@ export function ProductPage() {
           payload.product ?? payload.data?.product ?? payload.data ?? payload,
         )
         setProduct(nextProduct)
+        setSelectedVariantId(nextProduct.variants?.[0]?.id ?? "")
+        setActiveImage(0)
         if (nextProduct.goal) {
           apiRequest<any>(
             `/api/products?goal=${encodeURIComponent(nextProduct.goal)}`,
@@ -396,20 +500,62 @@ export function ProductPage() {
     ingredients: product.ingredients,
     use: product.howToUse,
   }
+  const selectedVariant = product.variants?.find((variant) => variant.id === selectedVariantId)
+  const available = selectedVariant?.stock ?? product.stock
+  const price = selectedVariant?.salePrice ?? product.salePrice ?? selectedVariant?.price ?? product.price
+  const originalPrice = selectedVariant?.salePrice != null
+    ? selectedVariant.price
+    : product.salePrice != null
+      ? product.price
+      : undefined
+  const images = product.images?.length ? product.images : product.image ? [product.image] : []
+  const currentImage = images[activeImage]
 
   return (
     <main className="pb-20">
       <div className="mx-auto grid max-w-7xl gap-12 px-5 py-12 lg:grid-cols-2 lg:px-8 lg:py-20">
-        <ProductImage product={product} className="h-[32rem] lg:h-[40rem]" />
+        <div>
+          <button type="button" onTouchStart={(event) => { imageTouchStart.current = event.touches[0]?.clientX ?? null }} onTouchEnd={(event) => {
+            if (imageTouchStart.current === null || images.length < 2) return
+            const delta = (event.changedTouches[0]?.clientX ?? imageTouchStart.current) - imageTouchStart.current
+            if (Math.abs(delta) > 40) {
+              setActiveImage((current) => (current + (delta < 0 ? 1 : images.length - 1)) % images.length)
+              imageSwiped.current = true
+              window.setTimeout(() => { imageSwiped.current = false }, 500)
+            }
+            imageTouchStart.current = null
+          }} onClick={() => {
+            if (imageSwiped.current) {
+              imageSwiped.current = false
+              return
+            }
+            setZoomed(true)
+          }} aria-label="Zoom product image" className="w-full cursor-zoom-in">
+            {currentImage ? <img src={currentImage} alt={`${product.name} image ${activeImage + 1}`} className="h-[32rem] w-full rounded-card object-cover lg:h-[40rem]" /> : <ProductImage product={product} className="h-[32rem] lg:h-[40rem]" />}
+          </button>
+          {images.length > 1 && <div className="mt-3 flex gap-3 overflow-x-auto">{images.map((image, index) => <button key={`${image}-${index}`} type="button" onClick={() => setActiveImage(index)} aria-label={`Show product image ${index + 1}`} className={`shrink-0 rounded-card ${activeImage === index ? "ring-2 ring-deep-fern" : ""}`}><img src={image} alt="" className="size-20 rounded-card object-cover" /></button>)}</div>}
+        </div>
         <div className="lg:pt-8">
           <p className="eyebrow">{product.goal}</p>
           <Heading level={1} className="mt-3 text-4xl sm:text-5xl">
             {product.name}
           </Heading>
           <p className="mt-4 text-xl font-semibold">
-            {formatNaira(product.price)}
+            {originalPrice != null && <span className="mr-2 rounded-full bg-terracotta px-2 py-1 align-middle text-xs font-bold text-white">Sale</span>}
+            {originalPrice != null && <span className="mr-2 text-base text-walnut/45 line-through">{formatNaira(originalPrice)}</span>}
+            {formatNaira(price)}
           </p>
+          {available <= 5 && <p className="mt-2 text-sm font-bold text-terracotta">{available > 0 ? `Only ${available} left` : "Out of stock"}</p>}
           <p className="mt-6 leading-7 text-walnut/65">{product.description}</p>
+          <p className="mt-3 text-xs leading-6 text-walnut/55">These statements have not been evaluated by NAFDAC. This product is not intended to diagnose, treat, cure or prevent any disease. Consult your doctor before use.</p>
+          {product.variants && product.variants.length > 0 && (
+            <label className="mt-6 block text-sm font-bold">
+              Pack size
+              <select value={selectedVariantId} onChange={(event) => { setSelectedVariantId(event.target.value); setQuantity(1) }} className="mt-2 block h-12 w-full rounded-card border border-walnut/15 bg-white/55 px-4">
+                {product.variants.map((variant) => <option key={variant.id} value={variant.id}>{variant.name} — {formatNaira(variant.salePrice ?? variant.price)}</option>)}
+              </select>
+            </label>
+          )}
           <div className="mt-8">
             <p className="mb-3 text-xs font-bold uppercase tracking-wider">
               Quantity
@@ -427,20 +573,29 @@ export function ProductPage() {
               <Button
                 variant="icon"
                 onClick={() =>
-                  setQuantity((value) => Math.min(product.stock, value + 1))
+                setQuantity((value) => Math.min(available, value + 1))
                 }
-                disabled={quantity >= product.stock}
+                disabled={quantity >= available}
                 aria-label="Increase quantity"
               >
                 +
               </Button>
             </div>
             <span className="ml-3 text-xs text-walnut/55">
-              {product.stock ? `${product.stock} available` : "Out of stock"}
+              {available ? `${available} available` : "Out of stock"}
             </span>
           </div>
           <div className="mt-7">
-            <ProductActions product={product} quantity={quantity} stacked />
+            <ProductActions product={product} quantity={quantity} stacked variant={selectedVariant} />
+          </div>
+          {zoomed && currentImage && (
+            <button type="button" className="fixed inset-0 z-[80] grid cursor-zoom-out place-items-center bg-black/85 p-5" aria-label="Close zoomed product image" onClick={() => setZoomed(false)}>
+              <img src={currentImage} alt={`${product.name} enlarged`} className="max-h-full max-w-full object-contain" />
+            </button>
+          )}
+          <div className="fixed inset-x-0 bottom-16 z-30 flex items-center justify-between gap-4 border-t border-walnut/10 bg-cream/95 px-4 py-3 shadow-nav backdrop-blur md:hidden">
+            <span className="font-bold">{formatNaira(price)}</span>
+            <ProductActions product={product} quantity={quantity} variant={selectedVariant} stacked />
           </div>
         </div>
       </div>
@@ -557,8 +712,27 @@ export function ProductPage() {
 }
 
 export function CartPage() {
-  const { items, setQuantity, removeItem } = useCart()
+  const { items, setQuantity, removeItem, setStock } = useCart()
   const navigate = useNavigate()
+  const [stockError, setStockError] = useState("")
+  const cartSignature = items.map((item) => `${item.id}:${item.variantId ?? ""}:${item.quantity}`).join("|")
+
+  useEffect(() => {
+    let active = true
+    setStockError("")
+    Promise.all(items.map(async (item) => {
+      if (!item.slug) return
+      const payload = await apiRequest<any>(`/api/products/${encodeURIComponent(item.slug)}`)
+      const product = normalizeProduct(payload.product ?? payload.data?.product ?? payload.data ?? payload)
+      const variant = item.variantId
+        ? product.variants?.find((entry) => entry.id === item.variantId)
+        : undefined
+      setStock(item.id, variant?.stock ?? product.stock, item.variantId)
+    })).catch((reason) => {
+      if (active) setStockError(reason instanceof Error ? reason.message : "Cart availability could not be checked.")
+    })
+    return () => { active = false }
+  }, [cartSignature])
 
   return (
     <main>
@@ -583,10 +757,11 @@ export function CartPage() {
           </div>
         ) : (
           <>
+            {stockError && <p role="alert" className="mb-4 rounded-card bg-terracotta/10 p-4 text-sm font-semibold text-terracotta">{stockError}</p>}
             <div className="divide-y divide-walnut/10 rounded-card border border-walnut/10 bg-white/30 px-5">
               {items.map((item) => (
                 <article
-                  key={item.id}
+                  key={`${item.id}:${item.variantId ?? ""}`}
                   className="grid grid-cols-[5rem_1fr] gap-4 py-6 sm:grid-cols-[6rem_1fr_auto]"
                 >
                   {item.image ? (
@@ -604,13 +779,14 @@ export function CartPage() {
                     <Heading level={2} className="text-xl">
                       {item.name}
                     </Heading>
+                    {item.stock !== undefined && item.stock <= 5 && <p className="mt-1 text-xs font-bold text-terracotta">{item.stock ? `Only ${item.stock} left` : "Out of stock"}</p>}
                     <p className="mt-1 text-sm font-semibold text-walnut/65">
                       {formatNaira(item.price)}
                     </p>
                     <Button
                       variant="nav"
                       className="mt-2 px-0 text-xs text-terracotta"
-                      onClick={() => removeItem(item.id)}
+                      onClick={() => removeItem(item.id, item.variantId)}
                     >
                       Remove
                     </Button>
@@ -618,7 +794,7 @@ export function CartPage() {
                   <div className="col-start-2 flex items-center sm:col-auto">
                     <Button
                       variant="icon"
-                      onClick={() => setQuantity(item.id, item.quantity - 1)}
+                      onClick={() => setQuantity(item.id, item.quantity - 1, item.variantId)}
                       aria-label={`Decrease ${item.name} quantity`}
                     >
                       −
@@ -628,7 +804,7 @@ export function CartPage() {
                     </span>
                     <Button
                       variant="icon"
-                      onClick={() => setQuantity(item.id, item.quantity + 1)}
+                      onClick={() => setQuantity(item.id, item.quantity + 1, item.variantId)}
                       disabled={
                         item.stock !== undefined && item.quantity >= item.stock
                       }
@@ -646,7 +822,7 @@ export function CartPage() {
                   ? "Demo prices only. No payment will be collected."
                   : "Your payable total will be confirmed by the server."}
               </p>
-              <Button className="mt-4" onClick={() => navigate("/checkout")}>
+              <Button className="mt-4" disabled={items.some((item) => item.stock === 0)} onClick={() => navigate("/checkout")}>
                 Continue to checkout <Icon name="arrowRight" size="sm" />
               </Button>
             </div>
@@ -680,7 +856,9 @@ export function CheckoutPage() {
     email: "",
     phone: "",
     address: "",
+    state: "",
   })
+  const [honeypot, setHoneypot] = useState("")
 
   const updateCustomer = (field: keyof typeof customer, value: string) =>
     setCustomer((current) => ({ ...current, [field]: value }))
@@ -696,9 +874,12 @@ export function CheckoutPage() {
           customer,
           items: items.map((item) => ({
             productId: item.id,
+            ...(item.variantId ? { variantId: item.variantId } : {}),
             qty: item.quantity,
           })),
           paymentMethod,
+          termsAccepted: true,
+          website: honeypot,
         }),
       })
       const result = (response as CheckoutResponse & { data?: CheckoutResponse }).data ?? response
@@ -716,7 +897,9 @@ export function CheckoutPage() {
     } catch (reason) {
       setError(
         reason instanceof Error
-          ? reason.message
+          ? (reason instanceof ApiError && reason.status === 429) || reason.message.toLowerCase().includes("too many")
+            ? "Too many requests, please try again shortly."
+            : reason.message
           : "Checkout could not be completed.",
       )
     } finally {
@@ -817,6 +1000,8 @@ export function CheckoutPage() {
             <TextField
               required
               type="tel"
+              pattern="(?:\+?234|0)[789][01][0-9]{8}"
+              title="Enter a valid Nigerian phone number."
               value={customer.phone}
               onChange={(event) => updateCustomer("phone", event.target.value)}
               placeholder="Phone number"
@@ -833,7 +1018,18 @@ export function CheckoutPage() {
               aria-label="Delivery address"
               className="sm:col-span-2"
             />
+            <label className="sm:col-span-2">
+              <span className="mb-2 block text-sm font-semibold">Nigerian state</span>
+              <select required value={customer.state} onChange={(event) => updateCustomer("state", event.target.value)} className="h-11 w-full rounded-card border border-walnut/15 bg-white/55 px-4 text-sm">
+                <option value="">Select state</option>
+                {nigerianStates.map((state) => <option key={state} value={state}>{state}</option>)}
+              </select>
+            </label>
           </div>
+          <label className="absolute -left-[10000px] top-auto h-px w-px overflow-hidden" aria-hidden="true">
+            Website
+            <input tabIndex={-1} autoComplete="off" value={honeypot} onChange={(event) => setHoneypot(event.target.value)} />
+          </label>
 
           <Heading level={2} className="mt-10 text-2xl">
             Payment
@@ -860,6 +1056,10 @@ export function CheckoutPage() {
               description="Pay when your order arrives at the delivery address."
             />
           </div>
+          <label className="mt-5 flex items-start gap-3 text-sm text-walnut/70">
+            <input type="checkbox" required className="mt-1 accent-deep-fern" />
+            <span>I agree to the <a href="/terms" className="font-bold text-deep-fern underline">terms</a> and <a href="/returns" className="font-bold text-deep-fern underline">returns policy</a>.</span>
+          </label>
         </div>
 
         <aside className="h-fit rounded-card border border-walnut/10 bg-white/35 p-6">
@@ -1015,6 +1215,60 @@ export function ThankYouPage() {
   )
 }
 
+export function TrackingPage() {
+  const [reference, setReference] = useState("")
+  const [email, setEmail] = useState("")
+  const [tracking, setTracking] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+
+  async function trackOrder(event: FormEvent) {
+    event.preventDefault()
+    setLoading(true)
+    setError("")
+    setTracking(null)
+    try {
+      const query = new URLSearchParams({ reference: reference.trim(), email: email.trim() })
+      setTracking(await apiRequest<any>(`/api/orders/track?${query}`))
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Order status could not be loaded.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <main className="mx-auto max-w-3xl px-5 py-16 lg:px-8 lg:py-24">
+      <p className="eyebrow">Order tracking</p>
+      <Heading level={1} className="mt-4 text-4xl sm:text-5xl">Follow your order</Heading>
+      <p className="mt-4 text-walnut/65">Enter your order reference and the email used at checkout.</p>
+      <form onSubmit={trackOrder} className="mt-8 grid gap-4 rounded-card border border-walnut/10 bg-white/30 p-6 sm:grid-cols-2">
+        <TextField required value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Order reference" aria-label="Order reference" />
+        <TextField required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email address" aria-label="Email address" />
+        <Button type="submit" disabled={loading} className="sm:col-span-2">{loading ? "Checking…" : "Track order"}</Button>
+      </form>
+      {error && <p role="alert" className="mt-5 rounded-card bg-terracotta/10 p-4 text-sm font-semibold text-terracotta">{error}</p>}
+      {tracking && <section className="mt-8 rounded-card bg-sage/15 p-6">
+        <p className="text-sm font-semibold">Reference: {tracking.reference}</p>
+        <ol className="mt-6 grid gap-4 sm:grid-cols-4">
+          {tracking.timeline.map((step: { status: string; label: string; complete: boolean }) => <li key={step.status} className={`rounded-card p-4 text-center ${step.complete ? "bg-deep-fern text-cream" : "bg-white/60 text-walnut/50"}`}><span className="block text-sm font-bold">{step.label}</span><span className="mt-1 block text-xs">{step.complete ? "Complete" : "Pending"}</span></li>)}
+        </ol>
+      </section>}
+    </main>
+  )
+}
+
+export function PolicyPage() {
+  const page = window.location.pathname.split("/").pop()
+  const policy = page === "privacy"
+    ? { title: "Privacy", copy: "We use the information you provide to process and deliver your orders, respond to support requests, and maintain essential site functionality. We do not sell personal information. Contact hello@zoenaturals.com to ask about your data." }
+    : page === "returns"
+      ? { title: "Returns", copy: "Contact hello@zoenaturals.com within 7 days of delivery if an item arrives damaged or incorrect. For hygiene and safety, opened supplements cannot be returned unless faulty. We’ll help arrange an eligible return or replacement." }
+      : { title: "Terms", copy: "By placing an order, you agree to provide accurate delivery information and accept the prices and policies shown at checkout. Product statements are not medical advice. Consult a qualified healthcare professional before using supplements." }
+  usePageMetadata(`${policy.title} | Zoenaturals`, `${policy.title} policy for Zoenaturals orders and customers.`)
+  return <main className="mx-auto max-w-3xl px-5 py-16 lg:px-8 lg:py-24"><p className="eyebrow">Customer information</p><Heading level={1} className="mt-4 text-4xl">{policy.title}</Heading><p className="mt-6 leading-8 text-walnut/70">{policy.copy}</p><p className="mt-5 text-sm text-walnut/55">Questions? Contact <a className="font-semibold text-deep-fern underline" href="mailto:hello@zoenaturals.com">hello@zoenaturals.com</a>.</p></main>
+}
+
 export function AdminPage() {
   const emptyForm: ProductInput = {
     name: "",
@@ -1132,6 +1386,10 @@ export function AdminPage() {
       slug: product.slug,
       name: product.name,
       price: product.price,
+      salesCount: product.salesCount,
+      salePrice: product.salePrice,
+      variants: product.variants,
+      images: product.images,
       category: product.category,
       goal: product.goal,
       image: product.image ?? "",
@@ -1751,14 +2009,20 @@ export function QuizPage() {
 }
 
 export function AccountPage() {
+  const [tab, setTab] = useState<"orders" | "subscriptions" | "details">("orders")
   return (
     <main className="mx-auto max-w-3xl px-5 py-16 lg:px-8 lg:py-24">
       <p className="eyebrow">My account</p>
       <Heading level={1} className="mt-4 text-4xl sm:text-5xl">
         Welcome back to your ritual.
       </Heading>
-      <div className="mt-10 rounded-card border border-walnut/10 bg-white/30 p-8">
-        <p className="text-walnut/65">Your account dashboard is ready for future sign-in flows and saved rituals.</p>
+      <div className="mt-10 flex flex-wrap gap-2 border-b border-walnut/15">
+        {(["orders", "subscriptions", "details"] as const).map((item) => <Button key={item} variant="nav" className={tab === item ? "border-b-2 border-deep-fern text-deep-fern" : ""} onClick={() => setTab(item)}>{item === "details" ? "Details" : item === "orders" ? "Orders & reorder" : "Subscriptions"}</Button>)}
+      </div>
+      <div className="mt-6 rounded-card border border-walnut/10 bg-white/30 p-8">
+        {tab === "orders" && <><p className="text-walnut/65">Your recent orders will appear here.</p><Button className="mt-5" onClick={() => (window.location.href = "/track")}>Track an order</Button></>}
+        {tab === "subscriptions" && <p className="text-walnut/65">You don’t have any active subscriptions yet. Subscribe-and-save options will appear here.</p>}
+        {tab === "details" && <div className="space-y-4"><TextField placeholder="Full name" aria-label="Full name" /><TextField type="email" placeholder="Email address" aria-label="Email address" /><TextField type="tel" placeholder="Phone number" aria-label="Phone number" /><p className="text-xs text-walnut/50">Account details are a mockup and are not saved.</p></div>}
         <div className="mt-6 flex flex-wrap gap-3">
           <Button onClick={() => (window.location.href = "/shop")}>Browse products</Button>
           <Button variant="secondary" onClick={() => (window.location.href = "/checkout")}>Checkout</Button>

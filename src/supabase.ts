@@ -29,6 +29,10 @@ function productFromRow(row: Record<string, any>): Product {
     slug: String(row.slug),
     name: String(row.name),
     price: Number(row.price ?? 0),
+    salesCount: Math.max(0, Number(row.sales_count ?? 0)),
+    salePrice: row.sale_price == null ? undefined : Number(row.sale_price),
+    variants: Array.isArray(row.variants) ? row.variants : [],
+    images: Array.isArray(row.images) ? row.images : row.image_url ? [row.image_url] : [],
     category: String(row.category ?? "Supplements"),
     goal: String(row.goal ?? "Everyday wellness"),
     image: row.image_url ?? undefined,
@@ -48,6 +52,10 @@ function productToRow(input: ProductInput) {
     slug: (input.slug && input.slug.trim()) || input.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
     name: input.name,
     price: Number(input.price) || 0,
+    sales_count: input.salesCount ?? 0,
+    sale_price: input.salePrice ? Number(input.salePrice) : null,
+    variants: input.variants ?? [],
+    images: input.images ?? (input.image ? [input.image] : []),
     category: input.category || "Supplements",
     goal: input.goal || "Everyday wellness",
     image_url: input.image || null,
@@ -117,11 +125,10 @@ export async function listAdminProducts(): Promise<Product[]> {
   return data.map(productFromRow)
 }
 
-export async function listPublishedProducts(): Promise<Product[]> {
+export async function listStorefrontProducts(): Promise<Product[]> {
   const { data, error } = await getClient()
     .from("products")
     .select("*")
-    .eq("published", true)
     .order("created_at", { ascending: false })
   if (error) throw error
   return data.map(productFromRow)

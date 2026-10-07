@@ -5,22 +5,31 @@ export function sendJson(response, status, body) {
   response.end(JSON.stringify(body))
 }
 
-export function requirePaymentConfig() {
-  const { PAYSTACK_SECRET_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SITE_URL } =
-    process.env
-  if (!PAYSTACK_SECRET_KEY || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !SITE_URL) {
-    throw new Error("Missing payment server configuration.")
+export function requireSupabaseConfig() {
+  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Missing Supabase server configuration.")
   }
   return {
-    paystackSecret: PAYSTACK_SECRET_KEY,
     supabaseUrl: SUPABASE_URL.replace(/\/$/, ""),
     serviceRoleKey: SUPABASE_SERVICE_ROLE_KEY,
+  }
+}
+
+export function requirePaymentConfig() {
+  const { PAYSTACK_SECRET_KEY, SITE_URL } = process.env
+  if (!PAYSTACK_SECRET_KEY || !SITE_URL) {
+    throw new Error("Missing Paystack server configuration.")
+  }
+  return {
+    ...requireSupabaseConfig(),
+    paystackSecret: PAYSTACK_SECRET_KEY,
     siteUrl: SITE_URL.replace(/\/$/, ""),
   }
 }
 
 export async function supabaseRequest(path, init = {}) {
-  const { supabaseUrl, serviceRoleKey } = requirePaymentConfig()
+  const { supabaseUrl, serviceRoleKey } = requireSupabaseConfig()
   const response = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
     ...init,
     headers: {
