@@ -401,24 +401,28 @@ function HomeImageSlider() {
   const slides = [
     {
       title: "Find your softer evening",
+      subtitle: "Calming botanical teas & tinctures crafted for deeper, restorative rest",
       action: "Shop Sleep",
       goal: "Sleep",
       image: "https://images.unsplash.com/photo-1515823064-d6e0c04616a7?auto=format&fit=crop&w=1800&q=85",
     },
     {
-      title: "Bring a little brightness to your day",
+      title: "Bring brightness to your day",
+      subtitle: "Clean, plant-powered energy blends without the jittery crash",
       action: "Shop Energy",
       goal: "Energy",
       image: "https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&w=1800&q=85",
     },
     {
-      title: "Everyday care, rooted in nature",
+      title: "Everyday immunity, rooted in nature",
+      subtitle: "Daily botanical defenses to keep you balanced and resilient",
       action: "Shop Immunity",
       goal: "Immunity",
       image: "https://images.unsplash.com/photo-1511690743698-d9d85f2fbf38?auto=format&fit=crop&w=1800&q=85",
     },
     {
       title: "A calmer rhythm starts within",
+      subtitle: "Gentle digestive comfort and nourishment for everyday vitality",
       action: "Shop Digestion",
       goal: "Digestion",
       image: "https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=1800&q=85",
@@ -436,11 +440,10 @@ function HomeImageSlider() {
     return () => window.clearInterval(timer)
   }, [paused, slides.length])
 
-  const slide = slides[active]
   return (
     <section className="mx-auto max-w-7xl px-5 pb-16 lg:px-8 lg:pb-24">
       <div
-        className="relative h-[20rem] overflow-hidden rounded-card bg-deep-fern sm:h-[26rem]"
+        className="relative h-[22rem] overflow-hidden rounded-card bg-deep-fern shadow-soft sm:h-[28rem]"
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
         onTouchStart={(event) => { setPaused(true); touchStart.current = event.touches[0]?.clientX ?? null }}
@@ -452,19 +455,57 @@ function HomeImageSlider() {
           setPaused(false)
         }}
       >
-        <img src={slide.image} alt="" className="absolute inset-0 size-full object-cover transition-opacity duration-500" />
-        <div className="absolute inset-0 bg-gradient-to-r from-walnut/70 via-walnut/25 to-transparent" />
-        <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col items-start justify-center p-7 text-cream sm:p-12">
-          <Heading level={2} className="text-4xl text-cream sm:text-5xl">{slide.title}</Heading>
-          <a href={`/shop?goal=${encodeURIComponent(slide.goal)}`} className="mt-6 inline-flex rounded-card bg-terracotta px-6 py-3 font-bold text-white">
-            {slide.action} <Icon name="arrowRight" size="sm" />
-          </a>
-        </div>
-        <Button variant="icon" className="absolute left-3 top-1/2 -translate-y-1/2 bg-cream/80" onClick={() => setActive((active + slides.length - 1) % slides.length)} aria-label="Previous slide"><Icon name="arrowLeft" /></Button>
-        <Button variant="icon" className="absolute right-3 top-1/2 -translate-y-1/2 bg-cream/80" onClick={() => setActive((active + 1) % slides.length)} aria-label="Next slide"><Icon name="arrowRight" /></Button>
-        <div className="absolute inset-x-0 bottom-4 flex justify-center gap-2">
+        {slides.map((item, index) => (
+          <div
+            key={item.goal}
+            className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+              active === index ? "z-10 opacity-100" : "pointer-events-none z-0 opacity-0"
+            }`}
+          >
+            <img
+              src={item.image}
+              alt=""
+              className="absolute inset-0 size-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-walnut/85 via-walnut/40 to-transparent" />
+            <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col items-start justify-center p-7 text-cream sm:p-12">
+              <p className="eyebrow !text-gold">{item.goal} Ritual</p>
+              <Heading level={2} className="mt-2 text-3xl text-cream sm:text-5xl">{item.title}</Heading>
+              <p className="mt-3 text-sm leading-relaxed text-cream/80 sm:text-base">{item.subtitle}</p>
+              <a
+                href={`/shop?goal=${encodeURIComponent(item.goal)}`}
+                className="mt-6 inline-flex items-center gap-2 rounded-card bg-terracotta px-6 py-3 font-bold text-white transition hover:bg-terracotta-dark"
+              >
+                {item.action} <Icon name="arrowRight" size="sm" />
+              </a>
+            </div>
+          </div>
+        ))}
+        <Button
+          variant="icon"
+          className="absolute left-3 top-1/2 z-20 -translate-y-1/2 bg-cream/80 text-walnut shadow-md hover:bg-cream"
+          onClick={() => setActive((active + slides.length - 1) % slides.length)}
+          aria-label="Previous slide"
+        >
+          <Icon name="arrowLeft" />
+        </Button>
+        <Button
+          variant="icon"
+          className="absolute right-3 top-1/2 z-20 -translate-y-1/2 bg-cream/80 text-walnut shadow-md hover:bg-cream"
+          onClick={() => setActive((active + 1) % slides.length)}
+          aria-label="Next slide"
+        >
+          <Icon name="arrowRight" />
+        </Button>
+        <div className="absolute inset-x-0 bottom-4 z-20 flex justify-center gap-2">
           {slides.map((item, index) => (
-            <button key={item.goal} aria-label={`Show slide ${index + 1}`} aria-current={active === index} onClick={() => setActive(index)} className={`size-2.5 rounded-full ${active === index ? "bg-white" : "bg-white/50"}`} />
+            <button
+              key={item.goal}
+              aria-label={`Show slide ${index + 1}`}
+              aria-current={active === index}
+              onClick={() => setActive(index)}
+              className={`h-2.5 rounded-full transition-all duration-300 ${active === index ? "w-8 bg-white" : "w-2.5 bg-white/50 hover:bg-white/75"}`}
+            />
           ))}
         </div>
       </div>
