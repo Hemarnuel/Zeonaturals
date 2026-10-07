@@ -25,14 +25,14 @@
     scroll-behavior: smooth;
   }
 
-  body {
-    margin: 0;
-    min-width: 320px;
-    background: var(--color-cream);
-    color: var(--color-walnut);
-    font-family: var(--font-sans);
-    -webkit-font-smoothing: antialiased;
-  }
+   body {
+     margin: 0;
+     min-width: 320px;
+     background: white;
+     color: var(--color-walnut);
+     font-family: var(--font-sans);
+     -webkit-font-smoothing: antialiased;
+   }
 
   button,
   input {
