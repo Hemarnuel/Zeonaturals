@@ -591,8 +591,6 @@ export function HomePage() {
         <HeroImageSlider />
       </section>
 
-      <GoalCollections availableGoals={availableGoals} />
-
       <section className="border-y border-walnut/10 bg-cream">
         <div className="mx-auto grid max-w-7xl grid-cols-2 px-5 py-8 lg:grid-cols-4 lg:px-8">
           {[
@@ -618,6 +616,8 @@ export function HomePage() {
           ))}
         </div>
       </section>
+
+      <GoalCollections availableGoals={availableGoals} />
 
       <section
         id="our-story"
