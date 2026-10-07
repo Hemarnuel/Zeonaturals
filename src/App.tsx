@@ -16,46 +16,30 @@ const herbalTeaImages = [
     alt: "Matcha tea whisked into a bright green latte",
   },
 ]
-const goalCards = [
+const heroSlides = [
   {
-    name: "Sleep",
-    description: "Rest deeply",
-    icon: "moon",
-    tone: "bg-[#EEF6EC] text-walnut border border-[#D9E7D4]",
-    badge: "bg-[#D9E7D4] text-deep-fern",
-    glow: "bg-[#D5E9C9]",
+    image: "https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&w=1400&q=85",
+    alt: "Herbal tea steeping in a glass cup beside tea bags",
+    tagline: "Brew a softer moment",
+    headline: "Let the day steep away.",
   },
   {
-    name: "Energy",
-    description: "Move brightly",
-    icon: "sun",
-    tone: "bg-[#FFF7E8] text-walnut border border-[#F2E2BC]",
-    badge: "bg-[#F9E6B7] text-walnut",
-    glow: "bg-[#F6D99A]",
+    image: "https://images.unsplash.com/photo-1515823064-d6e0c04616a7?auto=format&fit=crop&w=1400&q=85",
+    alt: "Matcha green tea whisked in a ceramic bowl",
+    tagline: "Clean morning ritual",
+    headline: "Clarity in every cup.",
   },
   {
-    name: "Immunity",
-    description: "Stay supported",
-    icon: "shield",
-    tone: "bg-[#F4F1EA] text-walnut border border-[#E3DCC8]",
-    badge: "bg-[#DDE4C6] text-deep-fern",
-    glow: "bg-[#CDD9B5]",
+    image: "https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&w=1400&q=85",
+    alt: "Fresh botanical ingredients and herbal infusion",
+    tagline: "Whole plant nourishment",
+    headline: "Rooted in real life.",
   },
   {
-    name: "Digestion",
-    description: "Feel balanced",
-    icon: "sprout",
-    tone: "bg-[#FCEFE9] text-walnut border border-[#F3D3C0]",
-    badge: "bg-[#F7D0B8] text-walnut",
-    glow: "bg-[#F4B89B]",
-  },
-  {
-    name: "Skin & Hair",
-    description: "Glow naturally",
-    icon: "sparkle",
-    tone: "bg-[#F3EEE9] text-walnut border border-[#E4D5C5]",
-    badge: "bg-[#E8D7C5] text-walnut",
-    glow: "bg-[#D9BF9F]",
+    image: "https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=1400&q=85",
+    alt: "Nourishing wellness bowl and organic herbs",
+    tagline: "Daily vitality & balance",
+    headline: "Feel light, naturally.",
   },
 ]
 
@@ -397,37 +381,7 @@ function ProductCard({ product, index }: ProductCardProps) {
   )
 }
 
-function HomeImageSlider() {
-  const slides = [
-    {
-      title: "Find your softer evening",
-      subtitle: "Calming botanical teas & tinctures crafted for deeper, restorative rest",
-      action: "Shop Sleep",
-      goal: "Sleep",
-      image: "https://images.unsplash.com/photo-1515823064-d6e0c04616a7?auto=format&fit=crop&w=1800&q=85",
-    },
-    {
-      title: "Bring brightness to your day",
-      subtitle: "Clean, plant-powered energy blends without the jittery crash",
-      action: "Shop Energy",
-      goal: "Energy",
-      image: "https://images.unsplash.com/photo-1544787219-7f47ccb76574?auto=format&fit=crop&w=1800&q=85",
-    },
-    {
-      title: "Everyday immunity, rooted in nature",
-      subtitle: "Daily botanical defenses to keep you balanced and resilient",
-      action: "Shop Immunity",
-      goal: "Immunity",
-      image: "https://images.unsplash.com/photo-1511690743698-d9d85f2fbf38?auto=format&fit=crop&w=1800&q=85",
-    },
-    {
-      title: "A calmer rhythm starts within",
-      subtitle: "Gentle digestive comfort and nourishment for everyday vitality",
-      action: "Shop Digestion",
-      goal: "Digestion",
-      image: "https://images.unsplash.com/photo-1490645935967-10de6ba17061?auto=format&fit=crop&w=1800&q=85",
-    },
-  ]
+function HeroImageSlider() {
   const [active, setActive] = useState(0)
   const [paused, setPaused] = useState(false)
   const touchStart = useRef<number | null>(null)
@@ -435,81 +389,83 @@ function HomeImageSlider() {
   useEffect(() => {
     if (paused) return
     const timer = window.setInterval(() => {
-      setActive((current) => (current + 1) % slides.length)
-    }, 5000)
+      setActive((current) => (current + 1) % heroSlides.length)
+    }, 4500)
     return () => window.clearInterval(timer)
-  }, [paused, slides.length])
+  }, [paused])
 
   return (
-    <section className="mx-auto max-w-7xl px-5 pb-16 lg:px-8 lg:pb-24">
-      <div
-        className="relative h-[22rem] overflow-hidden rounded-card bg-deep-fern shadow-soft sm:h-[28rem]"
-        onMouseEnter={() => setPaused(true)}
-        onMouseLeave={() => setPaused(false)}
-        onTouchStart={(event) => { setPaused(true); touchStart.current = event.touches[0]?.clientX ?? null }}
-        onTouchEnd={(event) => {
-          if (touchStart.current === null) return
-          const delta = (event.changedTouches[0]?.clientX ?? touchStart.current) - touchStart.current
-          if (Math.abs(delta) > 40) setActive((current) => (current + (delta < 0 ? 1 : slides.length - 1)) % slides.length)
-          touchStart.current = null
-          setPaused(false)
-        }}
-      >
-        {slides.map((item, index) => (
-          <div
-            key={item.goal}
-            className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
-              active === index ? "z-10 opacity-100" : "pointer-events-none z-0 opacity-0"
-            }`}
-          >
-            <img
-              src={item.image}
-              alt=""
-              className="absolute inset-0 size-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-walnut/85 via-walnut/40 to-transparent" />
-            <div className="absolute inset-y-0 left-0 flex max-w-xl flex-col items-start justify-center p-7 text-cream sm:p-12">
-              <p className="eyebrow !text-gold">{item.goal} Ritual</p>
-              <Heading level={2} className="mt-2 text-3xl text-cream sm:text-5xl">{item.title}</Heading>
-              <p className="mt-3 text-sm leading-relaxed text-cream/80 sm:text-base">{item.subtitle}</p>
-              <a
-                href={`/shop?goal=${encodeURIComponent(item.goal)}`}
-                className="mt-6 inline-flex items-center gap-2 rounded-card bg-terracotta px-6 py-3 font-bold text-white transition hover:bg-terracotta-dark"
-              >
-                {item.action} <Icon name="arrowRight" size="sm" />
-              </a>
-            </div>
+    <div
+      className="relative min-h-[25rem] overflow-hidden rounded-card bg-deep-fern shadow-soft sm:min-h-[30rem]"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onTouchStart={(event) => {
+        setPaused(true)
+        touchStart.current = event.touches[0]?.clientX ?? null
+      }}
+      onTouchEnd={(event) => {
+        if (touchStart.current === null) return
+        const delta = (event.changedTouches[0]?.clientX ?? touchStart.current) - touchStart.current
+        if (Math.abs(delta) > 40) {
+          setActive((current) => (current + (delta < 0 ? 1 : heroSlides.length - 1)) % heroSlides.length)
+        }
+        touchStart.current = null
+        setPaused(false)
+      }}
+    >
+      {heroSlides.map((slide, index) => (
+        <div
+          key={slide.image}
+          className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+            active === index ? "z-10 opacity-100" : "pointer-events-none z-0 opacity-0"
+          }`}
+        >
+          <img
+            src={slide.image}
+            alt={slide.alt}
+            className="absolute inset-0 size-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-walnut/85 via-walnut/20 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 p-6 text-cream sm:p-9">
+            <p className="text-xs font-bold uppercase tracking-widest text-gold">
+              {slide.tagline}
+            </p>
+            <p className="mt-2 max-w-sm font-heading text-3xl leading-tight sm:text-4xl">
+              {slide.headline}
+            </p>
           </div>
-        ))}
-        <Button
-          variant="icon"
-          className="absolute left-3 top-1/2 z-20 -translate-y-1/2 bg-cream/80 text-walnut shadow-md hover:bg-cream"
-          onClick={() => setActive((active + slides.length - 1) % slides.length)}
-          aria-label="Previous slide"
-        >
-          <Icon name="arrowLeft" />
-        </Button>
-        <Button
-          variant="icon"
-          className="absolute right-3 top-1/2 z-20 -translate-y-1/2 bg-cream/80 text-walnut shadow-md hover:bg-cream"
-          onClick={() => setActive((active + 1) % slides.length)}
-          aria-label="Next slide"
-        >
-          <Icon name="arrowRight" />
-        </Button>
-        <div className="absolute inset-x-0 bottom-4 z-20 flex justify-center gap-2">
-          {slides.map((item, index) => (
-            <button
-              key={item.goal}
-              aria-label={`Show slide ${index + 1}`}
-              aria-current={active === index}
-              onClick={() => setActive(index)}
-              className={`h-2.5 rounded-full transition-all duration-300 ${active === index ? "w-8 bg-white" : "w-2.5 bg-white/50 hover:bg-white/75"}`}
-            />
-          ))}
         </div>
+      ))}
+      <Button
+        variant="icon"
+        className="absolute left-3 top-1/2 z-20 -translate-y-1/2 bg-cream/80 text-walnut shadow-md hover:bg-cream"
+        onClick={() => setActive((active + heroSlides.length - 1) % heroSlides.length)}
+        aria-label="Previous image"
+      >
+        <Icon name="arrowLeft" />
+      </Button>
+      <Button
+        variant="icon"
+        className="absolute right-3 top-1/2 z-20 -translate-y-1/2 bg-cream/80 text-walnut shadow-md hover:bg-cream"
+        onClick={() => setActive((active + 1) % heroSlides.length)}
+        aria-label="Next image"
+      >
+        <Icon name="arrowRight" />
+      </Button>
+      <div className="absolute inset-x-0 bottom-3 z-20 flex justify-center gap-1.5">
+        {heroSlides.map((slide, index) => (
+          <button
+            key={slide.image}
+            aria-label={`Show slide ${index + 1}`}
+            aria-current={active === index}
+            onClick={() => setActive(index)}
+            className={`h-2 rounded-full transition-all duration-300 ${
+              active === index ? "w-6 bg-white" : "w-2 bg-white/50 hover:bg-white/75"
+            }`}
+          />
+        ))}
       </div>
-    </section>
+    </div>
   )
 }
 
@@ -632,49 +588,9 @@ export function HomePage() {
             </span>
           </div>
         </div>
-        <div className="relative min-h-[25rem] overflow-hidden rounded-card bg-deep-fern sm:min-h-[30rem]">
-          <img
-            src="https://images.unsplash.com/photo-1576092768241-dec231879fc3?auto=format&fit=crop&w=1400&q=85"
-            alt="Herbal tea steeping in a glass cup beside tea bags"
-            fetchPriority="high"
-            className="absolute inset-0 size-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-walnut/80 via-walnut/15 to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 p-6 text-cream sm:p-9">
-            <p className="text-xs font-bold uppercase tracking-widest text-gold">
-              Brew a softer moment
-            </p>
-            <p className="mt-2 max-w-sm font-heading text-3xl leading-tight sm:text-4xl">
-              Let the day steep away.
-            </p>
-          </div>
-        </div>
+        <HeroImageSlider />
       </section>
 
-      <section className="pb-16 lg:pb-24">
-        <div className="mx-auto max-w-7xl px-5 lg:px-8">
-          <div className="text-center">
-            <p className="eyebrow">Begin with how you want to feel</p>
-            <Heading level={2} className="mt-3 text-4xl sm:text-5xl">
-              Shop by goal
-            </Heading>
-          </div>
-          <div className="mt-8 flex snap-x snap-mandatory gap-3 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {goalCards.filter((goal) => availableGoals.includes(goal.name)).map((goal) => (
-              <NavLink
-                key={goal.name}
-                href={`/shop?goal=${encodeURIComponent(goal.name)}`}
-                className={`group flex min-w-28 snap-start flex-col items-center rounded-card p-4 text-center transition hover:-translate-y-1 sm:min-w-36 ${goal.tone}`}
-              >
-                <span className={`grid size-12 place-items-center rounded-2xl shadow-sm ${goal.badge}`}><Icon name={goal.icon} /></span>
-                <span className="mt-3 text-sm font-semibold">{goal.name}</span>
-              </NavLink>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <HomeImageSlider />
       <GoalCollections availableGoals={availableGoals} />
 
       <section className="border-y border-walnut/10 bg-cream">
